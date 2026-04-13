@@ -688,29 +688,51 @@ const tests = {
       // Extract the final numeric answer from the response
       let finalAnswer = null;
 
-      // Phase 1: High-confidence "final answer" patterns
-      const strongPatterns = [
-        /\\boxed\{[^}]*?(\d+)[^}]*?\}/,
-        /最终答案[是为：:\s]*\*{0,2}(\d+)/,
-        /答案[是为：:]\s*\*{0,2}(\d+)/,
-      ];
-
-      for (const pattern of strongPatterns) {
-        const m = text.match(pattern);
-        if (m) {
-          const n = Number(m[1]);
-          if (n >= 10 && n <= 50) { finalAnswer = n; break; }
+      // Phase 0: \boxed{...} with nested brace handling
+      // Handles \boxed{最少需要取出 \textbf{21} 个糖果} correctly
+      const boxedIdx = text.indexOf('\\boxed{');
+      if (boxedIdx >= 0) {
+        let depth = 0;
+        const start = boxedIdx + 7;
+        for (let i = start; i < text.length; i++) {
+          if (text[i] === '{') depth++;
+          else if (text[i] === '}') {
+            if (depth === 0) {
+              const boxedContent = text.slice(start, i);
+              const nums = (boxedContent.match(/\d+/g) || []).map(Number);
+              const valid = nums.filter(n => n >= 10 && n <= 50);
+              if (valid.length > 0) finalAnswer = valid[valid.length - 1];
+              break;
+            }
+            depth--;
+          }
         }
       }
 
-      // Phase 2: Contextual patterns — use LAST match
+      // Phase 1: High-confidence "final answer" patterns
+      if (finalAnswer === null) {
+        const strongPatterns = [
+          /最终答案[是为：:\s]*\*{0,2}(\d+)/,
+          /答案[是为：:]\s*\*{0,2}(\d+)/,
+          /最少[需要]*[取摸拿]出?\s*\*{0,2}(\d+)\s*个/,
+        ];
+
+        for (const pattern of strongPatterns) {
+          const m = text.match(pattern);
+          if (m) {
+            const n = Number(m[1]);
+            if (n >= 10 && n <= 50) { finalAnswer = n; break; }
+          }
+        }
+      }
+
+      // Phase 2: Contextual patterns — use LAST match, tighter context
       if (finalAnswer === null) {
         const contextPatterns = [
           /最少[需要]*[取摸拿]出?\s*\*{0,2}(\d+)/g,
-          /至少[需要]?\s*\*{0,2}(\d+)/g,
+          /至少[需要]?\s*\*{0,2}(\d+)\s*个/g,
           /所以[，,]?\s*(?:最少[需要]*[取摸拿]出?\s*)?\*{0,2}(\d+)/g,
           /因此[，,]?\s*(?:最少[需要]*[取摸拿]出?\s*)?\*{0,2}(\d+)/g,
-          /[=＝]\s*\*{0,2}(\d+)/g,
           /\*\*(\d+)\*\*\s*个糖果/g,
           /(\d+)\s*个糖果/g,
         ];
@@ -725,9 +747,10 @@ const tests = {
         }
       }
 
-      // Phase 3: Fallback — last reasonable number
+      // Phase 3: Fallback — last reasonable number in the final 200 chars
       if (finalAnswer === null) {
-        const allNumbers = (text.match(/\d+/g) || []).map(Number);
+        const tail = text.slice(-200);
+        const allNumbers = (tail.match(/\d+/g) || []).map(Number);
         const candidates = allNumbers.filter(n => n >= 10 && n <= 50);
         if (candidates.length > 0) {
           finalAnswer = candidates[candidates.length - 1];
