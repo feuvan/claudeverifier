@@ -1090,8 +1090,18 @@ async function runSingleTest(testId) {
   if (!test) return;
 
   setTestStatus(testId, 'running');
+
+  // Clear previous results
   const resultEl = document.getElementById(`test${testId}Result`);
   resultEl.classList.add('hidden');
+  const responseEl = document.getElementById(`test${testId}Response`);
+  if (responseEl) responseEl.textContent = '';
+  const thinkingEl = document.getElementById(`test${testId}Thinking`);
+  if (thinkingEl) { thinkingEl.style.display = 'none'; thinkingEl.textContent = ''; }
+  const analysisEl = document.getElementById(`test${testId}Analysis`);
+  if (analysisEl) { analysisEl.className = 'result-analysis'; analysisEl.textContent = ''; }
+  const timingEl = document.getElementById(`test${testId}Timing`);
+  if (timingEl) { timingEl.style.display = 'none'; timingEl.textContent = ''; }
 
   try {
     const result = await test.run();
