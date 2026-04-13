@@ -1577,4 +1577,16 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('scroll', () => {
     backToTopBtn.classList.toggle('visible', window.scrollY > 400);
   });
+
+  // Format build timestamps to local time
+  document.querySelectorAll('.footer-build time, .header-build time').forEach(el => {
+    const iso = el.getAttribute('datetime');
+    if (iso) {
+      const d = new Date(iso);
+      el.textContent = d.toLocaleString(undefined, {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      });
+    }
+  });
 });
