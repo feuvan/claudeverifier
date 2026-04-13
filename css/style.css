@@ -1250,6 +1250,17 @@ footer {
   font-size: 12px;
 }
 
+.footer-build {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.5;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.footer-build:empty {
+  display: none;
+}
+
 footer a {
   color: var(--accent);
   text-decoration: none;

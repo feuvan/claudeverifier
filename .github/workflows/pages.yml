@@ -22,6 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Inject build info
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          DATE=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')
+          REPO="${{ github.repository }}"
+          sed -i "s|<!-- BUILD_INFO -->|Updated ${DATE} (CST) · <a href=\"https://github.com/${REPO}/commit/${COMMIT}\">${COMMIT}</a>|" index.html
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
