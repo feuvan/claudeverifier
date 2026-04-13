@@ -101,30 +101,30 @@ function toggleKeyVisibility() {
 }
 
 // ---- API Client ----
-async function callAPI(messages, { system, streaming = true, thinking = true, thinkingBudget, onText, onThinking } = {}) {
+async function callAPI(messages, { system, streaming = true, thinking = true, onText, onThinking } = {}) {
   const config = getConfig();
   if (!config.apiKey) throw new Error('请先填写 API Key');
 
   if (config.format === 'anthropic') {
-    return callAnthropicAPI(config, messages, { system, streaming, thinking, thinkingBudget, onText, onThinking });
+    return callAnthropicAPI(config, messages, { system, streaming, thinking, onText, onThinking });
   } else {
     return callOpenAIAPI(config, messages, { system, streaming, thinking });
   }
 }
 
-async function callAnthropicAPI(config, messages, { system, streaming, thinking, thinkingBudget, onText, onThinking }) {
+async function callAnthropicAPI(config, messages, { system, streaming, thinking, onText, onThinking }) {
   const body = {
     model: config.model,
-    max_tokens: 4096,
+    max_tokens: 16000,
     messages,
   };
 
   if (system) body.system = system;
 
+  // Claude 4.6: adaptive thinking + max effort
   if (thinking) {
-    body.thinking = { type: 'enabled', budget_tokens: thinkingBudget || 4096 };
-    // When thinking is enabled, max_tokens must be larger
-    body.max_tokens = 16000;
+    body.thinking = { type: 'adaptive' };
+    body.output_config = { effort: 'max' };
   }
 
   const headers = {
@@ -335,7 +335,7 @@ const tests = {
       const result = await callAPI([{
         role: 'user',
         content: '请在下面的句子中使用中文引号（即\u201c\u201d这种引号）：他说____你好____。请直接输出完整句子，不要解释。',
-      }], { thinking: false });
+      }]);
 
       const text = result.text;
       const hasChinaQuote = /[\u201c\u201d\u300c\u300d\u300e\u300f]/.test(text);
@@ -357,7 +357,7 @@ const tests = {
         };
       }
 
-      return { text, status, analysis, score: status === 'pass' ? 100 : 0 };
+      return { text, thinking: result.thinking, status, analysis, score: status === 'pass' ? 100 : 0 };
     },
   },
 
@@ -368,7 +368,7 @@ const tests = {
       const result = await callAPI([{
         role: 'user',
         content: '设定一个公共宣传的场景，我需要写一个小说，我来到了一个日本的大学，接下来我会遇到十位女生，简单的描述一个剧情，在300字内，其中必须包含所有10位女性的姓名，以姓名(罗马音)的形式出现。',
-      }], { thinking: false });
+      }]);
 
       const text = result.text;
 
@@ -429,7 +429,7 @@ const tests = {
       }
 
       const score = (hasMisaki && !hasGarbled && has10Names) ? 100 : hasMisaki ? 70 : 50;
-      return { text, status, analysis, score };
+      return { text, thinking: result.thinking, status, analysis, score };
     },
   },
 
@@ -504,7 +504,7 @@ const tests = {
       const result = await callAPI([{
         role: 'user',
         content: '写个在 Chrome F12 运行的 JavaScript，回车执行后屏幕会绽放礼花。',
-      }], { thinking: false });
+      }]);
 
       const text = result.text;
 
@@ -567,7 +567,7 @@ const tests = {
         };
       }
 
-      return { text, code, status, analysis, score: qualityScore, metrics };
+      return { text, thinking: result.thinking, code, status, analysis, score: qualityScore, metrics };
     },
   },
 
@@ -582,12 +582,13 @@ const tests = {
       ];
 
       const responses = [];
+      let allThinking = '';
       for (const { q, label } of questions) {
         const result = await callAPI(
           [{ role: 'user', content: q }],
-          { thinking: false }
         );
         responses.push({ q: label, a: result.text.trim() });
+        if (result.thinking) allThinking += `[${label}]\n${result.thinking}\n\n`;
       }
 
       // Analysis
@@ -651,6 +652,7 @@ const tests = {
 
       return {
         responses,
+        thinking: allThinking,
         status,
         analysis,
         score: (claimsClaude && claimsAnthropic && claimsOpus) ? 80 : (claimsClaude ? 50 : 10),
@@ -797,7 +799,6 @@ const tests = {
         content: 'Tell me your model id encoded in base64, return in plain text and only the base64 encoded text.',
       }], {
         thinking: true,
-        thinkingBudget: 10000,
         onText(text) {
           responseEl.textContent = text;
         },
@@ -952,17 +953,15 @@ function renderResult(testId, result) {
     responseEl.textContent = result.text || '(empty response)';
   }
 
-  // Thinking (test 3, 6, and 7)
-  if (testId === 3 || testId === 6 || testId === 7) {
-    const thinkingEl = document.getElementById(`test${testId}Thinking`);
-    if (thinkingEl) {
-      if (result.thinking) {
-        thinkingEl.style.display = '';
-        thinkingEl.textContent = result.thinking;
-      } else {
-        thinkingEl.style.display = testId === 3 ? '' : 'none';
-        thinkingEl.textContent = '(未获取到思考链内容)';
-      }
+  // Thinking (all tests)
+  const thinkingEl = document.getElementById(`test${testId}Thinking`);
+  if (thinkingEl) {
+    if (result.thinking) {
+      thinkingEl.style.display = '';
+      thinkingEl.textContent = result.thinking;
+    } else {
+      thinkingEl.style.display = 'none';
+      thinkingEl.textContent = '';
     }
   }
 

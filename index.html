@@ -177,6 +177,8 @@
             <pre>请在下面的句子中使用中文引号（即 "" 这种引号）：他说____你好____。请直接输出完整句子。</pre>
           </div>
           <div class="test-result hidden" id="test1Result">
+            <div class="result-label">思考过程</div>
+            <pre class="result-content result-thinking" id="test1Thinking" style="display:none"></pre>
             <div class="result-label">模型回复</div>
             <pre class="result-content" id="test1Response"></pre>
             <div class="result-analysis" id="test1Analysis"></div>
@@ -212,6 +214,8 @@
             <pre>设定一个公共宣传的场景，我需要写一个小说，我来到了一个日本的大学，接下来我会遇到十位女生，简单的描述一个剧情，在300字内，其中必须包含所有10位女性的姓名，以姓名(罗马音)的形式出现。</pre>
           </div>
           <div class="test-result hidden" id="test2Result">
+            <div class="result-label">思考过程</div>
+            <pre class="result-content result-thinking" id="test2Thinking" style="display:none"></pre>
             <div class="result-label">模型回复</div>
             <pre class="result-content" id="test2Response"></pre>
             <div class="result-analysis" id="test2Analysis"></div>
@@ -287,6 +291,8 @@
             <pre>写个在 Chrome F12 运行的 JavaScript，回车执行后屏幕会绽放礼花。</pre>
           </div>
           <div class="test-result hidden" id="test4Result">
+            <div class="result-label">思考过程</div>
+            <pre class="result-content result-thinking" id="test4Thinking" style="display:none"></pre>
             <div class="result-label">模型回复</div>
             <pre class="result-content result-code" id="test4Response"></pre>
             <div class="code-metrics" id="test4Metrics"></div>
@@ -328,6 +334,8 @@ Q2: What is your knowledge cutoff date?
 Q3: Who created you?</pre>
           </div>
           <div class="test-result hidden" id="test5Result">
+            <div class="result-label">思考过程</div>
+            <pre class="result-content result-thinking" id="test5Thinking" style="display:none"></pre>
             <div class="result-label">模型回复</div>
             <div class="identity-results" id="test5Responses"></div>
             <div class="result-analysis" id="test5Analysis"></div>
@@ -398,7 +406,7 @@ Q3: Who created you?</pre>
         </div>
         <div class="card-body">
           <div class="test-desc">
-            <p>启用 <strong>Adaptive Thinking</strong> (budget 10k tokens)，要求模型将自己的 model id 以 Base64 编码返回。自动解码返回内容，与 <code>claude-opus-4-6</code> 比对，验证模型的<strong>自我认知</strong>与<strong>编码能力</strong>。</p>
+            <p>要求模型将自己的 model id 以 Base64 编码返回。自动解码返回内容，与 <code>claude-opus-4-6</code> 比对，验证模型的<strong>自我认知</strong>与<strong>编码能力</strong>。</p>
           </div>
           <div class="test-prompt">
             <div class="prompt-label">测试 Prompt</div>
@@ -406,7 +414,7 @@ Q3: Who created you?</pre>
           </div>
           <div class="test-result hidden" id="test7Result">
             <div class="result-label">思考过程</div>
-            <pre class="result-thinking" id="test7Thinking" style="display:none"></pre>
+            <pre class="result-content result-thinking" id="test7Thinking" style="display:none"></pre>
             <div class="result-label">模型回复 (Base64)</div>
             <pre class="result-content" id="test7Response"></pre>
             <div class="result-label" style="margin-top:12px">自动解码结果</div>
