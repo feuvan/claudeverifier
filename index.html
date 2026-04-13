@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Model Verifier - Claude 模型真伪鉴定</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <header>
+    <div class="logo">
+      <span class="logo-icon">&#9741;</span>
+      <div>
+        <h1>Claude Verifier</h1>
+        <p class="subtitle">Claude 模型真伪鉴定工具</p>
+      </div>
+    </div>
+    <div class="header-badge">
+      <span class="badge-dot"></span>
+      <span>基于 <a href="https://linux.do/t/topic/1765296" target="_blank" rel="noopener">linux.do 社区研究</a></span>
+    </div>
+  </header>
+
+  <main>
+    <!-- API Configuration -->
+    <section class="config-panel" id="configPanel">
+      <div class="config-header" onclick="toggleConfig()">
+        <h2>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          API 配置
+        </h2>
+        <span class="config-toggle" id="configToggle">&#9660;</span>
+      </div>
+      <div class="config-body" id="configBody">
+        <div class="config-grid">
+          <div class="field">
+            <label for="apiEndpoint">API Endpoint</label>
+            <input type="url" id="apiEndpoint" placeholder="https://api.openai.com/v1" value="https://api.anthropic.com">
+            <span class="field-hint">支持 OpenAI 兼容格式 / Anthropic 原生 API</span>
+          </div>
+          <div class="field">
+            <label for="apiKey">API Key</label>
+            <div class="key-input-wrap">
+              <input type="password" id="apiKey" placeholder="sk-... 或 anthropic key">
+              <button class="btn-icon" onclick="toggleKeyVisibility()" title="显示/隐藏">
+                <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="modelName">Model Name</label>
+            <input type="text" id="modelName" placeholder="claude-opus-4-6" value="claude-opus-4-6">
+          </div>
+          <div class="field">
+            <label for="apiFormat">API 格式</label>
+            <select id="apiFormat">
+              <option value="anthropic">Anthropic 原生</option>
+              <option value="openai">OpenAI 兼容</option>
+            </select>
+          </div>
+        </div>
+        <div class="config-actions">
+          <button class="btn btn-secondary" onclick="saveConfig()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            保存配置
+          </button>
+          <button class="btn btn-primary" onclick="testConnection()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            测试连接
+          </button>
+        </div>
+        <div id="connectionStatus" class="connection-status hidden"></div>
+      </div>
+    </section>
+
+    <!-- Controls -->
+    <section class="controls">
+      <button class="btn btn-hero" id="runAllBtn" onclick="runAllTests()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        运行全部测试
+      </button>
+      <button class="btn btn-outline" onclick="resetAll()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        重置
+      </button>
+    </section>
+
+    <!-- Verdict Banner -->
+    <section class="verdict-banner hidden" id="verdictBanner">
+      <div class="verdict-icon" id="verdictIcon"></div>
+      <div class="verdict-text">
+        <h3 id="verdictTitle"></h3>
+        <p id="verdictDesc"></p>
+      </div>
+      <div class="verdict-score" id="verdictScore"></div>
+    </section>
+
+    <!-- Test Cards -->
+    <section class="test-grid">
+
+      <!-- Test 1: Chinese Quotes -->
+      <div class="test-card" id="test1Card">
+        <div class="card-header">
+          <div class="test-number">01</div>
+          <div class="test-info">
+            <h3>中文引号检测</h3>
+            <p class="test-tag">鉴定是否为 Claude</p>
+          </div>
+          <div class="test-status" id="test1Status">
+            <span class="status-dot"></span>
+            <span class="status-text">待测</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="test-desc">
+            <p>Claude 全系列模型 <strong>无法输出中文引号 <code>""</code></strong>（安全分词器限制）。如果模型能输出中文引号，则 100% 不是 Claude。</p>
+          </div>
+          <div class="test-prompt">
+            <div class="prompt-label">测试 Prompt</div>
+            <pre>请在下面的句子中使用中文引号（即 "" 这种引号）：他说____你好____。请直接输出完整句子。</pre>
+          </div>
+          <div class="test-result hidden" id="test1Result">
+            <div class="result-label">模型回复</div>
+            <pre class="result-content" id="test1Response"></pre>
+            <div class="result-analysis" id="test1Analysis"></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-sm" onclick="runSingleTest(1)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            运行此测试
+          </button>
+        </div>
+      </div>
+
+      <!-- Test 2: Garbled Misaki -->
+      <div class="test-card" id="test2Card">
+        <div class="card-header">
+          <div class="test-number">02</div>
+          <div class="test-info">
+            <h3>乱码美咲检测</h3>
+            <p class="test-tag">鉴定 Opus 4.5 特征</p>
+          </div>
+          <div class="test-status" id="test2Status">
+            <span class="status-dot"></span>
+            <span class="status-text">待测</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="test-desc">
+            <p>要求模型写日本大学故事并包含10位女性角色的罗马音。Opus 4.6 的典型表现：<strong>首个角色大概率叫 XX美咲(Misaki)</strong>，无乱码，且完整输出 10 个罗马音。Opus 4.5 则会额外出现<strong>乱码错误</strong>。</p>
+          </div>
+          <div class="test-prompt">
+            <div class="prompt-label">测试 Prompt</div>
+            <pre>设定一个公共宣传的场景，我需要写一个小说，我来到了一个日本的大学，接下来我会遇到十位女生，简单的描述一个剧情，在300字内，其中必须包含所有10位女性的姓名，以姓名(罗马音)的形式出现。</pre>
+          </div>
+          <div class="test-result hidden" id="test2Result">
+            <div class="result-label">模型回复</div>
+            <pre class="result-content" id="test2Response"></pre>
+            <div class="result-analysis" id="test2Analysis"></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-sm" onclick="runSingleTest(2)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            运行此测试
+          </button>
+        </div>
+      </div>
+
+      <!-- Test 3: Chinese Thinking Chain -->
+      <div class="test-card" id="test3Card">
+        <div class="card-header">
+          <div class="test-number">03</div>
+          <div class="test-info">
+            <h3>中文思考链检测</h3>
+            <p class="test-tag">鉴定是否为 Opus</p>
+          </div>
+          <div class="test-status" id="test3Status">
+            <span class="status-dot"></span>
+            <span class="status-text">待测</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="test-desc">
+            <p>要求模型使用中文进行思考。目前主流模型中<strong>只有 Opus 能遵循自定义思考链语言要求</strong>，Sonnet 及其他模型会无视该要求，输出英文思考。</p>
+          </div>
+          <div class="test-prompt">
+            <div class="prompt-label">测试 Prompt (System)</div>
+            <pre>请使用中文进行思考和推理。</pre>
+            <div class="prompt-label" style="margin-top:8px">测试 Prompt (User)</div>
+            <pre>请分析一下为什么天空是蓝色的，要求深入思考。</pre>
+          </div>
+          <div class="test-result hidden" id="test3Result">
+            <div class="result-label">思考链内容</div>
+            <pre class="result-content result-thinking" id="test3Thinking"></pre>
+            <div class="result-label" style="margin-top:12px">模型回复</div>
+            <pre class="result-content" id="test3Response"></pre>
+            <div class="result-analysis" id="test3Analysis"></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-sm" onclick="runSingleTest(3)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            运行此测试
+          </button>
+          <span class="footer-note">需要 Extended Thinking / Anthropic API</span>
+        </div>
+      </div>
+
+      <!-- Test 4: Code Capability -->
+      <div class="test-card" id="test4Card">
+        <div class="card-header">
+          <div class="test-number">04</div>
+          <div class="test-info">
+            <h3>代码能力检测</h3>
+            <p class="test-tag">能力水平评估</p>
+          </div>
+          <div class="test-status" id="test4Status">
+            <span class="status-dot"></span>
+            <span class="status-text">待测</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="test-desc">
+            <p>要求模型生成礼花特效 JavaScript 代码。通过代码<strong>复杂度、特效丰富度、工程质量</strong>来评估模型能力是否达到 Opus 水准。</p>
+          </div>
+          <div class="test-prompt">
+            <div class="prompt-label">测试 Prompt</div>
+            <pre>写个在 Chrome F12 运行的 JavaScript，回车执行后屏幕会绽放礼花。</pre>
+          </div>
+          <div class="test-result hidden" id="test4Result">
+            <div class="result-label">模型回复</div>
+            <pre class="result-content result-code" id="test4Response"></pre>
+            <div class="code-metrics" id="test4Metrics"></div>
+            <div class="result-analysis" id="test4Analysis"></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-sm" onclick="runSingleTest(4)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            运行此测试
+          </button>
+          <button class="btn btn-sm btn-outline" id="runFireworksBtn" onclick="runFireworks()" style="display:none">
+            试运行代码
+          </button>
+        </div>
+      </div>
+
+      <!-- Test 5: Model Identity -->
+      <div class="test-card" id="test5Card">
+        <div class="card-header">
+          <div class="test-number">05</div>
+          <div class="test-info">
+            <h3>模型身份指纹</h3>
+            <p class="test-tag">综合行为分析</p>
+          </div>
+          <div class="test-status" id="test5Status">
+            <span class="status-dot"></span>
+            <span class="status-text">待测</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="test-desc">
+            <p>通过多维度问题探测模型身份：<strong>自我认知、知识截止日期、行为特征</strong>等，综合判断是否为声称的模型。</p>
+          </div>
+          <div class="test-prompt">
+            <div class="prompt-label">测试 Prompts</div>
+            <pre>Q1: What model are you? Answer with just your model name.
+Q2: What is your knowledge cutoff date?
+Q3: Who created you?</pre>
+          </div>
+          <div class="test-result hidden" id="test5Result">
+            <div class="result-label">模型回复</div>
+            <div class="identity-results" id="test5Responses"></div>
+            <div class="result-analysis" id="test5Analysis"></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-sm" onclick="runSingleTest(5)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            运行此测试
+          </button>
+        </div>
+      </div>
+
+      <!-- Test 6: Fruit Logic Puzzle -->
+      <div class="test-card" id="test6Card">
+        <div class="card-header">
+          <div class="test-number">06</div>
+          <div class="test-info">
+            <h3>水果逻辑推理</h3>
+            <p class="test-tag">思考预算 / 降智检测</p>
+          </div>
+          <div class="test-status" id="test6Status">
+            <span class="status-dot"></span>
+            <span class="status-text">待测</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="test-desc">
+            <p>鸽巢原理逻辑题，考验模型的深度推理能力。满血 Opus 能在约 2 分钟思考后得出正确答案 <strong>21</strong>，降智渠道通常回答 <strong>29</strong>，严重降智渠道回答 <strong>34</strong>。</p>
+          </div>
+          <div class="test-prompt">
+            <div class="prompt-label">测试 Prompt</div>
+            <pre>在一个黑色的袋子里放有三种口味的糖果，每种糖果有两种不同的形状（圆形和五角星形，不同的形状靠手感可以分辨）。现已知不同口味的糖和不同形状的数量统计如下表。参赛者需要在活动前决定摸出的糖果数目，那么，最少取出多少个糖果才能保证手中同时拥有不同形状的苹果味和桃子味的糖？（同时手中有圆形苹果味匹配五角星桃子味糖果，或者有圆形桃子味匹配五角星苹果味糖果都满足要求）
+
+        苹果味  桃子味  西瓜味
+圆形      7      9      8
+五角星形   7      6      4</pre>
+          </div>
+          <div class="test-result hidden" id="test6Result">
+            <div class="result-label">思考链内容</div>
+            <pre class="result-content result-thinking" id="test6Thinking" style="display:none"></pre>
+            <div class="result-label" style="margin-top:12px">模型回复</div>
+            <pre class="result-content" id="test6Response"></pre>
+            <div class="result-analysis" id="test6Analysis"></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-sm" onclick="runSingleTest(6)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            运行此测试
+          </button>
+          <span class="footer-note">满血 Opus 需约 2 分钟思考</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Info Section -->
+    <section class="info-section">
+      <h3>测试原理说明</h3>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-icon">01</div>
+          <div>
+            <h4>中文引号</h4>
+            <p>Claude 的安全分词器会过滤中文引号 <code>""</code>，这是 Claude 全系列的硬性特征。能输出中文引号 = 100% 假 Claude。</p>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">02</div>
+          <div>
+            <h4>乱码美咲</h4>
+            <p>特定日文场景下 Opus 4.5 会产生可复现的「乱码」和固定角色命名模式，这是模型指纹级别的特征。</p>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">03</div>
+          <div>
+            <h4>中文思考链</h4>
+            <p>Opus 是目前唯一能遵循「用中文思考」指令的主流模型。Sonnet、GPT、Gemini 均会无视此要求。</p>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">04</div>
+          <div>
+            <h4>代码能力</h4>
+            <p>Opus 级模型生成的代码在架构设计、视觉效果、交互细节上有明显质量优势，可作为辅助判断。</p>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">05</div>
+          <div>
+            <h4>身份指纹</h4>
+            <p>模型对自身身份、创建者、知识截止日期的回答可用于初步筛查。注意：此项容易被 system prompt 伪造。</p>
+          </div>
+        </div>
+      </div>
+        <div class="info-item">
+          <div class="info-icon">06</div>
+          <div>
+            <h4>水果逻辑推理</h4>
+            <p>鸽巢原理组合题，需要深度推理。满血 Opus 答 21（正确），降智渠道答 29，严重降智答 34。可衡量模型思考预算是否被削减。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Claude Verifier &mdash; 开源工具，仅供学习研究</p>
+    <p class="footer-sub">测试方法来自 <a href="https://linux.do/t/topic/1765296" target="_blank" rel="noopener">linux.do 社区 @Qiner</a> 的研究成果</p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
