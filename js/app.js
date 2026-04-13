@@ -1280,18 +1280,11 @@ function toggleRawMode() {
     rawEditor.classList.remove('hidden');
     // Pre-fill with current request template
     const config = getConfig();
-    const template = config.format === 'anthropic' ? {
+    const template = {
       model: config.model,
       thinking: { type: 'adaptive' },
       messages: [
         ...state.chatMessages,
-        { role: 'user', content: normalInput.value || '你好' },
-      ],
-    } : {
-      model: config.model,
-      max_tokens: 4096,
-      messages: [
-        ...state.chatMessages.map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: normalInput.value || '你好' },
       ],
     };

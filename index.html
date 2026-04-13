@@ -57,8 +57,8 @@
         <div class="config-grid">
           <div class="field">
             <label for="apiEndpoint">API Endpoint</label>
-            <input type="url" id="apiEndpoint" placeholder="https://api.openai.com/v1" value="https://api.anthropic.com">
-            <span class="field-hint">支持 OpenAI 兼容格式 / Anthropic 原生 API</span>
+            <input type="url" id="apiEndpoint" placeholder="https://api.anthropic.com" value="https://api.anthropic.com">
+            <span class="field-hint">Anthropic 原生 API</span>
           </div>
           <div class="field">
             <label for="apiKey">API Key</label>
@@ -73,13 +73,7 @@
             <label for="modelName">Model Name</label>
             <input type="text" id="modelName" placeholder="claude-opus-4-6" value="claude-opus-4-6">
           </div>
-          <div class="field">
-            <label for="apiFormat">API 格式</label>
-            <select id="apiFormat">
-              <option value="anthropic">Anthropic 原生</option>
-              <option value="openai">OpenAI 兼容</option>
-            </select>
-          </div>
+          <input type="hidden" id="apiFormat" value="anthropic">
         </div>
         <div class="config-actions">
           <button class="btn btn-secondary" onclick="saveConfig()">
@@ -507,7 +501,7 @@ Q3: Who created you?</pre>
           <h4>快速开始</h4>
           <ol>
             <li>在「API 配置」面板中填写 API Endpoint 和 API Key</li>
-            <li>选择正确的 API 格式（Anthropic 原生 / OpenAI 兼容）</li>
+            <li>使用 Anthropic 原生 API 格式</li>
             <li>填写要测试的模型名称（如 <code>claude-opus-4-6</code>）</li>
             <li>点击「保存配置」将当前配置保存到本地（支持保存多组配置，通过下拉切换）</li>
             <li>点击「测试连接」确认配置无误</li>
@@ -517,8 +511,7 @@ Q3: Who created you?</pre>
         <div class="guide-block">
           <h4>API 格式说明</h4>
           <ul>
-            <li><strong>Anthropic 原生</strong> &mdash; 完整支持所有测试项目，包括 Extended Thinking（思考链检测和逻辑推理）。推荐使用。</li>
-            <li><strong>OpenAI 兼容</strong> &mdash; 适用于第三方代理/反代服务。思考链相关测试可能无法正常工作。</li>
+            <li><strong>Anthropic 原生 API</strong> &mdash; 完整支持所有测试项目，包括 Adaptive Thinking（思考链检测和逻辑推理）。</li>
           </ul>
         </div>
         <div class="guide-block">
