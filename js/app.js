@@ -124,7 +124,7 @@ async function callAnthropicAPI(config, messages, { system, streaming, thinking,
   // Claude 4.6: adaptive thinking + max effort
   if (thinking) {
     body.thinking = { type: 'adaptive' };
-    body.output_config = { effort: 'max' };
+    body.output_config = { effort: 'high' };
   }
 
   const headers = {
