@@ -747,9 +747,9 @@ const tests = {
       // Extract the final numeric answer from the response
       let finalAnswer = null;
 
-      // Phase 0: \boxed{...} with nested brace handling
-      // Handles \boxed{最少需要取出 \textbf{21} 个糖果} correctly
-      const boxedIdx = text.indexOf('\\boxed{');
+      // Phase 0: LAST \boxed{...} with nested brace handling
+      // Uses lastIndexOf — the final \boxed is the answer, earlier ones are reasoning
+      const boxedIdx = text.lastIndexOf('\\boxed{');
       if (boxedIdx >= 0) {
         let depth = 0;
         const start = boxedIdx + 7;
