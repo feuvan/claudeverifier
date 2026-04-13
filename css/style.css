@@ -1067,6 +1067,17 @@ main {
   margin-left: auto;
 }
 
+.test-timing {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  letter-spacing: 0.3px;
+}
+
 /* Info Section */
 .info-section {
   padding: 32px 0;

@@ -115,7 +115,7 @@ async function callAPI(messages, { system, streaming = true, thinking = true, on
 async function callAnthropicAPI(config, messages, { system, streaming, thinking, onText, onThinking }) {
   const body = {
     model: config.model,
-    max_tokens: 16000,
+    max_tokens: 128000, // Claude Opus 4.6 exclusive
     messages,
   };
 
@@ -334,12 +334,26 @@ function streamTo(testId) {
   resultEl.classList.remove('hidden');
   if (responseEl) responseEl.textContent = '';
   if (thinkingEl) { thinkingEl.style.display = 'none'; thinkingEl.textContent = ''; }
+  const timing = { start: performance.now(), ttft: null };
   return {
-    onText(text) { if (responseEl) responseEl.textContent = text; },
+    onText(text) {
+      if (timing.ttft === null) timing.ttft = performance.now();
+      if (responseEl) responseEl.textContent = text;
+    },
     onThinking(thinking) {
+      if (timing.ttft === null) timing.ttft = performance.now();
       if (thinkingEl) { thinkingEl.style.display = ''; thinkingEl.textContent = thinking; }
     },
+    timing,
   };
+}
+
+function calcTiming(stream) {
+  const now = performance.now();
+  const total = now - stream.timing.start;
+  const ttft = stream.timing.ttft ? stream.timing.ttft - stream.timing.start : null;
+  const generation = ttft !== null ? now - stream.timing.ttft : null;
+  return { total, ttft, generation };
 }
 
 // ---- Test Definitions ----
@@ -374,7 +388,7 @@ const tests = {
         };
       }
 
-      return { text, thinking: result.thinking, status, analysis, score: status === 'pass' ? 100 : 0 };
+      return { text, thinking: result.thinking, status, analysis, score: status === 'pass' ? 100 : 0, timing: calcTiming(stream) };
     },
   },
 
@@ -447,7 +461,7 @@ const tests = {
       }
 
       const score = (hasMisaki && !hasGarbled && has10Names) ? 100 : hasMisaki ? 70 : 50;
-      return { text, thinking: result.thinking, status, analysis, score };
+      return { text, thinking: result.thinking, status, analysis, score, timing: calcTiming(stream) };
     },
   },
 
@@ -514,6 +528,7 @@ const tests = {
         status,
         analysis,
         score: !thinking ? 50 : (chineseRatio > 0.3 ? 100 : 10),
+        timing: calcTiming(stream),
       };
     },
   },
@@ -589,7 +604,7 @@ const tests = {
         };
       }
 
-      return { text, thinking: result.thinking, code, status, analysis, score: qualityScore, metrics };
+      return { text, thinking: result.thinking, code, status, analysis, score: qualityScore, metrics, timing: calcTiming(stream) };
     },
   },
 
@@ -607,6 +622,7 @@ const tests = {
       const thinkingEl = document.getElementById('test5Thinking');
       resultEl.classList.remove('hidden');
       if (thinkingEl) { thinkingEl.style.display = 'none'; thinkingEl.textContent = ''; }
+      const timingData = { start: performance.now(), ttft: null };
 
       const responses = [];
       let allThinking = '';
@@ -615,6 +631,7 @@ const tests = {
           [{ role: 'user', content: q }],
           {
             onThinking(thinking) {
+              if (timingData.ttft === null) timingData.ttft = performance.now();
               if (thinkingEl) {
                 thinkingEl.style.display = '';
                 thinkingEl.textContent = allThinking + `[${label}]\n${thinking}`;
@@ -685,12 +702,18 @@ const tests = {
         };
       }
 
+      const now = performance.now();
       return {
         responses,
         thinking: allThinking,
         status,
         analysis,
         score: (claimsClaude && claimsAnthropic && claimsOpus) ? 80 : (claimsClaude ? 50 : 10),
+        timing: {
+          total: now - timingData.start,
+          ttft: timingData.ttft ? timingData.ttft - timingData.start : null,
+          generation: timingData.ttft ? now - timingData.ttft : null,
+        },
       };
     },
   },
@@ -832,6 +855,7 @@ const tests = {
         status,
         analysis,
         score: finalAnswer === 21 ? 100 : (finalAnswer === 29 ? 30 : (finalAnswer === 34 ? 10 : 40)),
+        timing: calcTiming(stream),
       };
     },
   },
@@ -952,7 +976,7 @@ const tests = {
         };
       }
 
-      return { text, decoded, thinking: result.thinking, status, analysis, score };
+      return { text, decoded, thinking: result.thinking, status, analysis, score, timing: calcTiming(stream) };
     },
   },
 };
@@ -1047,6 +1071,17 @@ function renderResult(testId, result) {
   if (result.analysis) {
     analysisEl.className = `result-analysis analysis-${result.analysis.type}`;
     analysisEl.textContent = result.analysis.text;
+  }
+
+  // Timing
+  const timingEl = document.getElementById(`test${testId}Timing`);
+  if (timingEl && result.timing) {
+    const fmt = ms => ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+    const parts = [`Total ${fmt(result.timing.total)}`];
+    if (result.timing.ttft !== null) parts.push(`TTFT ${fmt(result.timing.ttft)}`);
+    if (result.timing.generation !== null) parts.push(`Gen ${fmt(result.timing.generation)}`);
+    timingEl.textContent = parts.join('  |  ');
+    timingEl.style.display = '';
   }
 }
 
