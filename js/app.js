@@ -326,16 +326,33 @@ async function testConnection() {
   }
 }
 
+// ---- Streaming Helper ----
+function streamTo(testId) {
+  const resultEl = document.getElementById(`test${testId}Result`);
+  const responseEl = document.getElementById(`test${testId}Response`);
+  const thinkingEl = document.getElementById(`test${testId}Thinking`);
+  resultEl.classList.remove('hidden');
+  if (responseEl) responseEl.textContent = '';
+  if (thinkingEl) { thinkingEl.style.display = 'none'; thinkingEl.textContent = ''; }
+  return {
+    onText(text) { if (responseEl) responseEl.textContent = text; },
+    onThinking(thinking) {
+      if (thinkingEl) { thinkingEl.style.display = ''; thinkingEl.textContent = thinking; }
+    },
+  };
+}
+
 // ---- Test Definitions ----
 const tests = {
   // Test 1: Chinese Quotes
   1: {
     name: '中文引号检测',
     async run() {
+      const stream = streamTo(1);
       const result = await callAPI([{
         role: 'user',
         content: '请在下面的句子中使用中文引号（即\u201c\u201d这种引号）：他说____你好____。请直接输出完整句子，不要解释。',
-      }]);
+      }], stream);
 
       const text = result.text;
       const hasChinaQuote = /[\u201c\u201d\u300c\u300d\u300e\u300f]/.test(text);
@@ -365,10 +382,11 @@ const tests = {
   2: {
     name: '乱码美咲检测',
     async run() {
+      const stream = streamTo(2);
       const result = await callAPI([{
         role: 'user',
         content: '设定一个公共宣传的场景，我需要写一个小说，我来到了一个日本的大学，接下来我会遇到十位女生，简单的描述一个剧情，在300字内，其中必须包含所有10位女性的姓名，以姓名(罗马音)的形式出现。',
-      }]);
+      }], stream);
 
       const text = result.text;
 
@@ -438,6 +456,7 @@ const tests = {
     name: '中文思考链检测',
     async run() {
       const config = getConfig();
+      const stream = streamTo(3);
 
       let result;
       if (config.format === 'anthropic') {
@@ -447,6 +466,7 @@ const tests = {
             system: '请使用中文进行思考和推理。你的内部思考过程必须全部使用中文。',
             thinking: true,
             streaming: true,
+            ...stream,
           }
         );
       } else {
@@ -454,6 +474,7 @@ const tests = {
           [{ role: 'user', content: '<instruction>请使用中文进行思考。</instruction>\n\n请分析一下为什么天空是蓝色的，要求深入思考。' }],
           {
             system: '请使用中文进行思考和推理。你的内部思考过程必须全部使用中文。',
+            ...stream,
           }
         );
       }
@@ -501,10 +522,11 @@ const tests = {
   4: {
     name: '代码能力检测',
     async run() {
+      const stream = streamTo(4);
       const result = await callAPI([{
         role: 'user',
         content: '写个在 Chrome F12 运行的 JavaScript，回车执行后屏幕会绽放礼花。',
-      }]);
+      }], stream);
 
       const text = result.text;
 
@@ -581,11 +603,24 @@ const tests = {
         { q: 'Who created you? Answer with just the company name, nothing else.', label: 'Creator' },
       ];
 
+      const resultEl = document.getElementById('test5Result');
+      const thinkingEl = document.getElementById('test5Thinking');
+      resultEl.classList.remove('hidden');
+      if (thinkingEl) { thinkingEl.style.display = 'none'; thinkingEl.textContent = ''; }
+
       const responses = [];
       let allThinking = '';
       for (const { q, label } of questions) {
         const result = await callAPI(
           [{ role: 'user', content: q }],
+          {
+            onThinking(thinking) {
+              if (thinkingEl) {
+                thinkingEl.style.display = '';
+                thinkingEl.textContent = allThinking + `[${label}]\n${thinking}`;
+              }
+            },
+          }
         );
         responses.push({ q: label, a: result.text.trim() });
         if (result.thinking) allThinking += `[${label}]\n${result.thinking}\n\n`;
@@ -673,14 +708,15 @@ const tests = {
 请一步步仔细推理，给出最终答案。`;
 
       const config = getConfig();
+      const stream = streamTo(6);
       let result;
       if (config.format === 'anthropic') {
         result = await callAPI(
           [{ role: 'user', content: prompt }],
-          { thinking: true, streaming: true }
+          { thinking: true, streaming: true, ...stream }
         );
       } else {
-        result = await callAPI([{ role: 'user', content: prompt }]);
+        result = await callAPI([{ role: 'user', content: prompt }], stream);
       }
 
       const text = result.text || '';
@@ -807,34 +843,16 @@ const tests = {
       const EXPECTED_MODEL = 'claude-opus-4-6';
       const EXPECTED_B64 = btoa(EXPECTED_MODEL); // Y2xhdWRlLW9wdXMtNC02
 
-      // Show streaming progress in the result area
-      const resultEl = document.getElementById('test7Result');
-      const responseEl = document.getElementById('test7Response');
+      const stream = streamTo(7);
       const decodedEl = document.getElementById('test7Decoded');
-      const thinkingEl = document.getElementById('test7Thinking');
-      resultEl.classList.remove('hidden');
-      responseEl.textContent = '';
-      decodedEl.textContent = '';
-      if (thinkingEl) { thinkingEl.style.display = 'none'; thinkingEl.textContent = ''; }
+      if (decodedEl) decodedEl.textContent = '';
 
       const result = await callAPI([{
         role: 'user',
         content: 'Tell me your model id encoded in base64, return in plain text and only the base64 encoded text.',
-      }], {
-        thinking: true,
-        onText(text) {
-          responseEl.textContent = text;
-        },
-        onThinking(thinking) {
-          if (thinkingEl) {
-            thinkingEl.style.display = '';
-            thinkingEl.textContent = thinking;
-          }
-        },
-      });
+      }], { thinking: true, ...stream });
 
       const text = result.text.trim();
-      responseEl.textContent = text;
 
       // Extract the base64 string: strip quotes, backticks, whitespace, markdown
       const cleaned = text
