@@ -6,6 +6,10 @@
 const state = {
   results: {},  // testId -> { status, score, details }
   running: false,
+  chatMessages: [],  // { role, content }
+  chatThinking: true,
+  chatRawMode: false,
+  chatStreaming: false,
 };
 
 // ---- Config ----
@@ -20,11 +24,57 @@ function getConfig() {
 
 function saveConfig() {
   const config = getConfig();
-  localStorage.setItem('claude_verifier_config', JSON.stringify(config));
-  showToast('配置已保存');
+  const profiles = JSON.parse(localStorage.getItem('claude_verifier_profiles') || '{}');
+  const name = prompt('配置名称:', config.model || 'default');
+  if (!name) return;
+  profiles[name] = config;
+  localStorage.setItem('claude_verifier_profiles', JSON.stringify(profiles));
+  loadProfileList();
+  document.getElementById('profileSelect').value = name;
+  showToast('配置已保存: ' + name);
+}
+
+function loadProfileList() {
+  const profiles = JSON.parse(localStorage.getItem('claude_verifier_profiles') || '{}');
+  const select = document.getElementById('profileSelect');
+  // Keep the first option
+  select.innerHTML = '<option value="">-- 新建配置 --</option>';
+  for (const name of Object.keys(profiles)) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  }
+}
+
+function loadProfile() {
+  const select = document.getElementById('profileSelect');
+  const name = select.value;
+  if (!name) return;
+  const profiles = JSON.parse(localStorage.getItem('claude_verifier_profiles') || '{}');
+  const config = profiles[name];
+  if (!config) return;
+  if (config.endpoint) document.getElementById('apiEndpoint').value = config.endpoint;
+  if (config.apiKey) document.getElementById('apiKey').value = config.apiKey;
+  if (config.model) document.getElementById('modelName').value = config.model;
+  if (config.format) document.getElementById('apiFormat').value = config.format;
+  showToast('已加载配置: ' + name);
+}
+
+function deleteProfile() {
+  const select = document.getElementById('profileSelect');
+  const name = select.value;
+  if (!name) { showToast('请先选择要删除的配置'); return; }
+  if (!confirm(`确定删除配置「${name}」？`)) return;
+  const profiles = JSON.parse(localStorage.getItem('claude_verifier_profiles') || '{}');
+  delete profiles[name];
+  localStorage.setItem('claude_verifier_profiles', JSON.stringify(profiles));
+  loadProfileList();
+  showToast('已删除配置: ' + name);
 }
 
 function loadConfig() {
+  // Legacy single-config migration
   const saved = localStorage.getItem('claude_verifier_config');
   if (saved) {
     try {
@@ -35,6 +85,7 @@ function loadConfig() {
       if (config.format) document.getElementById('apiFormat').value = config.format;
     } catch (e) { /* ignore */ }
   }
+  loadProfileList();
 }
 
 function toggleConfig() {
@@ -119,7 +170,7 @@ async function callAnthropicAPI(config, messages, { system, streaming, thinking 
   return extractAnthropicResponse(data);
 }
 
-async function parseAnthropicStream(response) {
+async function parseAnthropicStream(response, { onThinking, onText } = {}) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -144,8 +195,10 @@ async function parseAnthropicStream(response) {
         if (event.type === 'content_block_delta') {
           if (event.delta?.type === 'thinking_delta') {
             thinkingText += event.delta.thinking || '';
+            if (onThinking) onThinking(thinkingText);
           } else if (event.delta?.type === 'text_delta') {
             responseText += event.delta.text || '';
+            if (onText) onText(responseText);
           }
         }
       } catch (e) { /* skip unparseable lines */ }
@@ -178,6 +231,26 @@ async function callOpenAIAPI(config, messages, { system, streaming, thinking }) 
     max_tokens: 4096,
   };
 
+  if (streaming) {
+    body.stream = true;
+
+    const response = await fetch(`${config.endpoint}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`API Error ${response.status}: ${err}`);
+    }
+
+    return parseOpenAIStream(response);
+  }
+
   const response = await fetch(`${config.endpoint}/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -200,6 +273,39 @@ async function callOpenAIAPI(config, messages, { system, streaming, thinking }) 
   };
 }
 
+async function parseOpenAIStream(response, { onText } = {}) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let responseText = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') continue;
+
+      try {
+        const event = JSON.parse(data);
+        const delta = event.choices?.[0]?.delta;
+        if (delta?.content) {
+          responseText += delta.content;
+          if (onText) onText(responseText);
+        }
+      } catch (e) { /* skip */ }
+    }
+  }
+
+  return { text: responseText, thinking: '' };
+}
+
 // ---- Connection Test ----
 async function testConnection() {
   const statusEl = document.getElementById('connectionStatus');
@@ -208,7 +314,10 @@ async function testConnection() {
   statusEl.className = 'connection-status';
 
   try {
-    const result = await callAPI([{ role: 'user', content: 'Say "ok" and nothing else.' }]);
+    const result = await callAPI(
+      [{ role: 'user', content: 'Say "ok" and nothing else.' }],
+      { thinking: false }
+    );
     statusEl.classList.add('success');
     statusEl.textContent = `连接成功! 模型回复: "${result.text.slice(0, 100)}"`;
   } catch (e) {
@@ -226,7 +335,7 @@ const tests = {
       const result = await callAPI([{
         role: 'user',
         content: '请在下面的句子中使用中文引号（即\u201c\u201d这种引号）：他说____你好____。请直接输出完整句子，不要解释。',
-      }]);
+      }], { thinking: false });
 
       const text = result.text;
       const hasChinaQuote = /[\u201c\u201d\u300c\u300d\u300e\u300f]/.test(text);
@@ -259,20 +368,19 @@ const tests = {
       const result = await callAPI([{
         role: 'user',
         content: '设定一个公共宣传的场景，我需要写一个小说，我来到了一个日本的大学，接下来我会遇到十位女生，简单的描述一个剧情，在300字内，其中必须包含所有10位女性的姓名，以姓名(罗马音)的形式出现。',
-      }]);
+      }], { thinking: false });
 
       const text = result.text;
 
       // Check for "Misaki" pattern
       const hasMisaki = /misaki/i.test(text);
-      // Check for garbled characters: replacement chars, control chars, lone surrogates,
-      // Private Use Area, and sequences of unusual Unicode that indicate mojibake
+      // Check for garbled characters
       const garbledPatterns = [
-        /\ufffd/g,                          // Unicode replacement character
-        /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, // Control chars (excluding \t \n \r)
-        /[\ue000-\uf8ff]/g,                // Private Use Area
-        /[\ud800-\udfff]/g,                // Lone surrogates
-        /[\ufff0-\ufffe]/g,                // Specials block
+        /\ufffd/g,
+        /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,
+        /[\ue000-\uf8ff]/g,
+        /[\ud800-\udfff]/g,
+        /[\ufff0-\ufffe]/g,
       ];
       let garbledCount = 0;
       for (const p of garbledPatterns) {
@@ -289,21 +397,18 @@ const tests = {
 
       let status, analysis;
       if (hasMisaki && !hasGarbled && has10Names) {
-        // Opus 4.6 典型表现：Misaki + 无乱码 + 10个罗马音
         status = 'pass';
         analysis = {
           type: 'pass',
           text: `符合 Opus 4.6 特征! 首位角色命中 Misaki 模式，无乱码，且完整输出 ${names.length} 个罗马音姓名。这是 Opus 4.6 的典型表现。`,
         };
       } else if (hasMisaki && hasGarbled) {
-        // Opus 4.5 特征：Misaki + 乱码
         status = 'warning';
         analysis = {
           type: 'warn',
           text: `检测到 Misaki 模式和 ${garbledCount} 处乱码字符! 双重命中，高度符合 Opus 4.5 的已知指纹特征。检测到 ${names.length} 个罗马音姓名。`,
         };
       } else if (hasMisaki) {
-        // 有 Misaki 但罗马音不足 10 个
         status = 'warning';
         analysis = {
           type: 'info',
@@ -345,7 +450,6 @@ const tests = {
           }
         );
       } else {
-        // OpenAI-compatible: thinking is returned differently
         result = await callAPI(
           [{ role: 'user', content: '<instruction>请使用中文进行思考。</instruction>\n\n请分析一下为什么天空是蓝色的，要求深入思考。' }],
           {
@@ -400,7 +504,7 @@ const tests = {
       const result = await callAPI([{
         role: 'user',
         content: '写个在 Chrome F12 运行的 JavaScript，回车执行后屏幕会绽放礼花。',
-      }]);
+      }], { thinking: false });
 
       const text = result.text;
 
@@ -479,7 +583,10 @@ const tests = {
 
       const responses = [];
       for (const { q, label } of questions) {
-        const result = await callAPI([{ role: 'user', content: q }]);
+        const result = await callAPI(
+          [{ role: 'user', content: q }],
+          { thinking: false }
+        );
         responses.push({ q: label, a: result.text.trim() });
       }
 
@@ -579,11 +686,11 @@ const tests = {
       // Extract the final numeric answer from the response
       let finalAnswer = null;
 
-      // Phase 1: High-confidence "final answer" patterns (order matters)
+      // Phase 1: High-confidence "final answer" patterns
       const strongPatterns = [
-        /\\boxed\{[^}]*?(\d+)[^}]*?\}/,              // LaTeX boxed answer (strongest signal, extracts number from within)
-        /最终答案[是为：:\s]*\*{0,2}(\d+)/,            // "最终答案" heading
-        /答案[是为：:]\s*\*{0,2}(\d+)/,               // "答案是/为"
+        /\\boxed\{[^}]*?(\d+)[^}]*?\}/,
+        /最终答案[是为：:\s]*\*{0,2}(\d+)/,
+        /答案[是为：:]\s*\*{0,2}(\d+)/,
       ];
 
       for (const pattern of strongPatterns) {
@@ -594,7 +701,7 @@ const tests = {
         }
       }
 
-      // Phase 2: Contextual patterns — use LAST match (final answer typically near the end)
+      // Phase 2: Contextual patterns — use LAST match
       if (finalAnswer === null) {
         const contextPatterns = [
           /最少[需要]*[取摸拿]出?\s*\*{0,2}(\d+)/g,
@@ -602,13 +709,12 @@ const tests = {
           /所以[，,]?\s*(?:最少[需要]*[取摸拿]出?\s*)?\*{0,2}(\d+)/g,
           /因此[，,]?\s*(?:最少[需要]*[取摸拿]出?\s*)?\*{0,2}(\d+)/g,
           /[=＝]\s*\*{0,2}(\d+)/g,
-          /\*\*(\d+)\*\*\s*个糖果/g,                    // **N** 个糖果
+          /\*\*(\d+)\*\*\s*个糖果/g,
           /(\d+)\s*个糖果/g,
         ];
 
         for (const pattern of contextPatterns) {
           const matches = [...text.matchAll(pattern)];
-          // Take the last match for each pattern (final answer is near the end)
           for (let i = matches.length - 1; i >= 0; i--) {
             const n = Number(matches[i][1]);
             if (n >= 10 && n <= 50) { finalAnswer = n; break; }
@@ -617,7 +723,7 @@ const tests = {
         }
       }
 
-      // Phase 3: Fallback — last reasonable number in the entire text
+      // Phase 3: Fallback — last reasonable number
       if (finalAnswer === null) {
         const allNumbers = (text.match(/\d+/g) || []).map(Number);
         const candidates = allNumbers.filter(n => n >= 10 && n <= 50);
@@ -668,7 +774,84 @@ const tests = {
       };
     },
   },
+
+  // Test 7: Base64 Decode Detection
+  7: {
+    name: 'Base64 编解码检测',
+    async run() {
+      // 正确解码结果: "我爱人工智能，它让世界更了不起"
+      const b64Input = '5oiR54ix5Lq65bel5pm66IO977yM5a6D6K6p5LiW55WM5pu05LqG5LiN6LW3';
+      const correctDecode = '我爱人工智能，它让世界更了不起';
+
+      const result = await callAPI([{
+        role: 'user',
+        content: `请将以下 Base64 编码的字符串解码，直接输出解码后的原文，不要解释：\n\n${b64Input}`,
+      }], { thinking: false });
+
+      const text = result.text.trim();
+
+      // Remove surrounding quotes and whitespace for comparison
+      const cleaned = text.replace(/^["'`\s]+|["'`\s]+$/g, '').trim();
+
+      // Calculate similarity to the correct answer
+      const correctChars = [...correctDecode];
+      const responseChars = [...cleaned];
+
+      // Character-level match count
+      let matchCount = 0;
+      const minLen = Math.min(correctChars.length, responseChars.length);
+      for (let i = 0; i < minLen; i++) {
+        if (correctChars[i] === responseChars[i]) matchCount++;
+      }
+      const similarity = correctChars.length > 0 ? matchCount / correctChars.length : 0;
+
+      // Check for common error patterns
+      const hasGarbled = /[\ufffd]/.test(cleaned);
+      const hasMojibake = /[\u00c0-\u00ff]{2,}/.test(cleaned);  // Latin mojibake
+      const hasPartialChinese = (cleaned.match(/[\u4e00-\u9fff]/g) || []).length;
+      const isExactMatch = cleaned === correctDecode;
+      const isCloseMatch = similarity >= 0.7;
+
+      let status, analysis;
+      if (isExactMatch) {
+        status = 'pass';
+        analysis = {
+          type: 'info',
+          text: `解码完全正确!\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\nBase64 解码正确并不能排除或确认 Claude 身份 -- 多数主流模型在简单 Base64 解码任务上都可能正确。此项作为辅助参考。`,
+        };
+      } else if (isCloseMatch) {
+        status = 'warning';
+        analysis = {
+          type: 'info',
+          text: `解码基本正确，相似度 ${(similarity * 100).toFixed(0)}%。\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\n存在少量偏差，可能是分词器导致的细微错误。这种「接近但不完全正确」的模式在 Claude 中较常见。`,
+        };
+      } else if (hasPartialChinese >= 3) {
+        status = 'warning';
+        analysis = {
+          type: 'warn',
+          text: `解码部分正确，识别到 ${hasPartialChinese} 个中文字符，相似度 ${(similarity * 100).toFixed(0)}%。\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\n部分中文被正确解码但存在丢字或乱码，这是 LLM 分词器处理 Base64 的常见表现。`,
+        };
+      } else if (hasGarbled || hasMojibake) {
+        status = 'fail';
+        analysis = {
+          type: 'fail',
+          text: `解码出现严重乱码。\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\n模型无法正确处理 Base64 中文解码，可能是较弱的模型或分词器不兼容。`,
+        };
+      } else {
+        status = 'warning';
+        analysis = {
+          type: 'warn',
+          text: `解码结果与预期不符，相似度 ${(similarity * 100).toFixed(0)}%。\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\n需人工判断解码质量。`,
+        };
+      }
+
+      const score = isExactMatch ? 80 : (isCloseMatch ? 60 : (hasPartialChinese >= 3 ? 40 : 20));
+      return { text, status, analysis, score };
+    },
+  },
 };
+
+const TOTAL_TESTS = 7;
 
 // ---- Test Runner ----
 function setTestStatus(testId, status, text) {
@@ -681,7 +864,6 @@ function setTestStatus(testId, status, text) {
   else if (status === 'fail') card.classList.add('test-failed');
   else if (status === 'warning') card.classList.add('test-warning');
 
-  const dot = statusEl.querySelector('.status-dot');
   const label = statusEl.querySelector('.status-text');
 
   const statusMap = {
@@ -797,8 +979,8 @@ async function runAllTests() {
   document.getElementById('verdictBanner').classList.add('hidden');
 
   // Run tests sequentially
-  for (const testId of [1, 2, 3, 4, 5, 6]) {
-    await runSingleTest(testId);
+  for (let i = 1; i <= TOTAL_TESTS; i++) {
+    await runSingleTest(i);
   }
 
   // Show verdict
@@ -828,7 +1010,6 @@ function showVerdict() {
   // Key indicators
   const test1 = state.results[1]; // Chinese quotes
   const test3 = state.results[3]; // Thinking chain
-  const test5 = state.results[5]; // Identity
   const test6 = state.results[6]; // Logic puzzle
 
   const isFullPowerOpus = test6 && test6.score === 100; // answered 21
@@ -837,7 +1018,6 @@ function showVerdict() {
   // Determine verdict
   let verdict;
   if (test1 && test1.status === 'fail') {
-    // Chinese quotes detected = definitely not Claude
     verdict = 'not_claude';
   } else if (test3 && test3.status === 'pass' && test1 && test1.status === 'pass' && isFullPowerOpus) {
     verdict = 'real_opus_full';
@@ -912,7 +1092,7 @@ function resetAll() {
   state.results = {};
   document.getElementById('verdictBanner').classList.add('hidden');
 
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= TOTAL_TESTS; i++) {
     setTestStatus(i, 'pending');
     const resultEl = document.getElementById(`test${i}Result`);
     if (resultEl) resultEl.classList.add('hidden');
@@ -930,6 +1110,282 @@ function runFireworks() {
       alert('代码执行出错: ' + e.message);
     }
   }
+}
+
+// ---- Chat Panel ----
+function toggleChat() {
+  const body = document.getElementById('chatBody');
+  const toggle = document.getElementById('chatToggle');
+  body.classList.toggle('collapsed');
+  toggle.classList.toggle('collapsed');
+}
+
+function toggleRawMode() {
+  state.chatRawMode = !state.chatRawMode;
+  const btn = document.getElementById('rawModeBtn');
+  const normalInput = document.getElementById('chatInput');
+  const rawEditor = document.getElementById('chatRawEditor');
+
+  btn.classList.toggle('active', state.chatRawMode);
+
+  if (state.chatRawMode) {
+    normalInput.classList.add('hidden');
+    rawEditor.classList.remove('hidden');
+    // Pre-fill with current request template
+    const config = getConfig();
+    const template = config.format === 'anthropic' ? {
+      model: config.model,
+      max_tokens: 4096,
+      messages: [
+        ...state.chatMessages,
+        { role: 'user', content: normalInput.value || '你好' },
+      ],
+    } : {
+      model: config.model,
+      max_tokens: 4096,
+      messages: [
+        ...state.chatMessages.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: normalInput.value || '你好' },
+      ],
+    };
+    document.getElementById('chatRawInput').value = JSON.stringify(template, null, 2);
+  } else {
+    normalInput.classList.remove('hidden');
+    rawEditor.classList.add('hidden');
+  }
+}
+
+function toggleChatThinking() {
+  state.chatThinking = !state.chatThinking;
+  const btn = document.getElementById('thinkingToggleBtn');
+  btn.classList.toggle('active', state.chatThinking);
+}
+
+function clearChat() {
+  state.chatMessages = [];
+  document.getElementById('chatMessages').innerHTML = '';
+}
+
+function addChatBubble(role, content, { thinking, isError } = {}) {
+  const container = document.getElementById('chatMessages');
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `chat-msg chat-msg-${role}`;
+
+  const roleLabel = document.createElement('div');
+  roleLabel.className = 'chat-role';
+  roleLabel.textContent = role === 'user' ? 'You' : 'Assistant';
+  msgDiv.appendChild(roleLabel);
+
+  if (thinking) {
+    const thinkDiv = document.createElement('div');
+    thinkDiv.className = 'chat-thinking';
+    thinkDiv.textContent = thinking;
+    msgDiv.appendChild(thinkDiv);
+  }
+
+  const textDiv = document.createElement('div');
+  textDiv.className = 'chat-text' + (isError ? ' chat-error' : '');
+  textDiv.textContent = content;
+  msgDiv.appendChild(textDiv);
+
+  container.appendChild(msgDiv);
+  container.scrollTop = container.scrollHeight;
+
+  return { msgDiv, textDiv };
+}
+
+async function sendChatMessage() {
+  if (state.chatStreaming) return;
+
+  const config = getConfig();
+  if (!config.apiKey) {
+    showToast('请先填写 API Key');
+    return;
+  }
+
+  let userContent;
+  let rawBody = null;
+
+  if (state.chatRawMode) {
+    try {
+      rawBody = JSON.parse(document.getElementById('chatRawInput').value);
+      userContent = '(Raw JSON request)';
+    } catch (e) {
+      showToast('JSON 格式错误: ' + e.message);
+      return;
+    }
+  } else {
+    userContent = document.getElementById('chatInput').value.trim();
+    if (!userContent) return;
+  }
+
+  // Add user message
+  addChatBubble('user', userContent);
+  state.chatMessages.push({ role: 'user', content: userContent });
+
+  // Clear input
+  if (!state.chatRawMode) {
+    document.getElementById('chatInput').value = '';
+  }
+
+  // Show streaming bubble
+  const { msgDiv, textDiv } = addChatBubble('assistant', '');
+  msgDiv.classList.add('chat-msg-streaming');
+
+  const sendBtn = document.getElementById('chatSendBtn');
+  sendBtn.disabled = true;
+  state.chatStreaming = true;
+
+  let thinkDiv = null;
+
+  try {
+    let result;
+    if (rawBody) {
+      // Raw mode: send the JSON body directly
+      const headers = config.format === 'anthropic'
+        ? {
+            'Content-Type': 'application/json',
+            'x-api-key': config.apiKey,
+            'anthropic-version': '2023-06-01',
+          }
+        : {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey}`,
+          };
+
+      const url = config.format === 'anthropic'
+        ? `${config.endpoint}/v1/messages`
+        : `${config.endpoint}/v1/chat/completions`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(rawBody),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`API Error ${response.status}: ${err}`);
+      }
+
+      const data = await response.json();
+      if (config.format === 'anthropic') {
+        result = extractAnthropicResponse(data);
+      } else {
+        const choice = data.choices?.[0];
+        result = { text: choice?.message?.content || '', thinking: '' };
+      }
+    } else {
+      // Normal mode with streaming
+      const messages = state.chatMessages.map(m => ({ role: m.role, content: m.content }));
+
+      if (config.format === 'anthropic' && state.chatThinking) {
+        // Streaming with thinking callbacks
+        const body = {
+          model: config.model,
+          max_tokens: 16000,
+          messages,
+          stream: true,
+          thinking: { type: 'enabled', budget_tokens: 4096 },
+        };
+
+        const headers = {
+          'Content-Type': 'application/json',
+          'x-api-key': config.apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'interleaved-thinking-2025-05-14',
+          'Accept': 'text/event-stream',
+        };
+
+        const response = await fetch(`${config.endpoint}/v1/messages`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(`API Error ${response.status}: ${err}`);
+        }
+
+        result = await parseAnthropicStream(response, {
+          onThinking(t) {
+            if (!thinkDiv) {
+              thinkDiv = document.createElement('div');
+              thinkDiv.className = 'chat-thinking';
+              msgDiv.insertBefore(thinkDiv, textDiv);
+            }
+            thinkDiv.textContent = t;
+            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+          },
+          onText(t) {
+            textDiv.textContent = t;
+            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+          },
+        });
+      } else if (config.format === 'openai') {
+        // OpenAI streaming
+        const msgs = [...messages];
+        const body = {
+          model: config.model,
+          messages: msgs,
+          max_tokens: 4096,
+          stream: true,
+        };
+
+        const response = await fetch(`${config.endpoint}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(`API Error ${response.status}: ${err}`);
+        }
+
+        result = await parseOpenAIStream(response, {
+          onText(t) {
+            textDiv.textContent = t;
+            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+          },
+        });
+      } else {
+        // Anthropic without thinking
+        result = await callAPI(messages, {
+          thinking: false,
+          streaming: true,
+        });
+      }
+    }
+
+    // Update final content
+    textDiv.textContent = result.text || '(empty response)';
+    if (result.thinking && !thinkDiv) {
+      thinkDiv = document.createElement('div');
+      thinkDiv.className = 'chat-thinking';
+      msgDiv.insertBefore(thinkDiv, textDiv);
+      thinkDiv.textContent = result.thinking;
+    }
+
+    // Store assistant message
+    state.chatMessages.push({ role: 'assistant', content: result.text });
+  } catch (e) {
+    textDiv.textContent = `Error: ${e.message}`;
+    textDiv.classList.add('chat-error');
+  } finally {
+    msgDiv.classList.remove('chat-msg-streaming');
+    sendBtn.disabled = false;
+    state.chatStreaming = false;
+  }
+}
+
+// ---- Back to Top ----
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ---- Utils ----
@@ -959,4 +1415,19 @@ function showToast(message) {
 // ---- Init ----
 document.addEventListener('DOMContentLoaded', () => {
   loadConfig();
+
+  // Chat input: Enter to send, Shift+Enter for newline
+  const chatInput = document.getElementById('chatInput');
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+
+  // Back to top scroll listener
+  const backToTopBtn = document.getElementById('backToTop');
+  window.addEventListener('scroll', () => {
+    backToTopBtn.classList.toggle('visible', window.scrollY > 400);
+  });
 });

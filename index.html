@@ -19,6 +19,9 @@
         <p class="subtitle">Claude 模型真伪鉴定工具</p>
       </div>
     </div>
+    <nav class="header-nav">
+      <a href="#guide">使用说明</a>
+    </nav>
     <div class="header-badge">
       <span class="badge-dot"></span>
       <span>基于 <a href="https://linux.do/t/topic/1765296" target="_blank" rel="noopener">linux.do 社区研究</a></span>
@@ -36,6 +39,17 @@
         <span class="config-toggle" id="configToggle">&#9660;</span>
       </div>
       <div class="config-body" id="configBody">
+        <div class="config-profiles">
+          <label for="profileSelect">已保存的配置</label>
+          <div class="profile-select-row">
+            <select id="profileSelect" onchange="loadProfile()">
+              <option value="">-- 新建配置 --</option>
+            </select>
+            <button class="btn-icon-inline" onclick="deleteProfile()" title="删除选中配置">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </div>
         <div class="config-grid">
           <div class="field">
             <label for="apiEndpoint">API Endpoint</label>
@@ -74,6 +88,45 @@
           </button>
         </div>
         <div id="connectionStatus" class="connection-status hidden"></div>
+      </div>
+    </section>
+
+    <!-- Chat Window -->
+    <section class="chat-panel" id="chatPanel">
+      <div class="chat-header" onclick="toggleChat()">
+        <h2>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          自由对话
+        </h2>
+        <span class="chat-toggle" id="chatToggle">&#9660;</span>
+      </div>
+      <div class="chat-body collapsed" id="chatBody">
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input-area">
+          <div class="chat-input-toolbar">
+            <button class="btn-toggle" id="rawModeBtn" onclick="toggleRawMode()" title="Raw JSON 模式">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Raw
+            </button>
+            <button class="btn-toggle active" id="thinkingToggleBtn" onclick="toggleChatThinking()" title="Extended Thinking">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+              Thinking
+            </button>
+            <div style="flex:1"></div>
+            <button class="btn-toggle" onclick="clearChat()">清空</button>
+          </div>
+          <textarea id="chatInput" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="3"></textarea>
+          <div id="chatRawEditor" class="hidden">
+            <textarea id="chatRawInput" rows="14" spellcheck="false" placeholder="编辑 JSON 请求体..."></textarea>
+          </div>
+          <div class="chat-send-row">
+            <span class="chat-hint" id="chatHint"></span>
+            <button class="btn btn-primary" id="chatSendBtn" onclick="sendChatMessage()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              发送
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -330,6 +383,43 @@ Q3: Who created you?</pre>
         </div>
       </div>
 
+      <!-- Test 7: Base64 Detection -->
+      <div class="test-card" id="test7Card">
+        <div class="card-header">
+          <div class="test-number">07</div>
+          <div class="test-info">
+            <h3>Base64 编解码检测</h3>
+            <p class="test-tag">分词器指纹检测</p>
+          </div>
+          <div class="test-status" id="test7Status">
+            <span class="status-dot"></span>
+            <span class="status-text">待测</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="test-desc">
+            <p>要求模型解码一段 Base64 字符串。Claude 的分词器对 Base64 有<strong>特定的解码错误模式</strong>（如中文解码乱码、丢字），而 GPT 系列等模型的错误模式不同。通过比对错误特征可辅助鉴别模型。</p>
+          </div>
+          <div class="test-prompt">
+            <div class="prompt-label">测试 Prompt</div>
+            <pre>请将以下 Base64 编码的字符串解码，直接输出解码后的原文，不要解释：
+
+5oiR54ix5Lq65bel5pm66IO977yM5a6D6K6p5LiW55WM5pu05LqG5LiN6LW3</pre>
+          </div>
+          <div class="test-result hidden" id="test7Result">
+            <div class="result-label">模型回复</div>
+            <pre class="result-content" id="test7Response"></pre>
+            <div class="result-analysis" id="test7Analysis"></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-sm" onclick="runSingleTest(7)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            运行此测试
+          </button>
+        </div>
+      </div>
+
     </section>
 
     <!-- Info Section -->
@@ -371,7 +461,6 @@ Q3: Who created you?</pre>
             <p>模型对自身身份、创建者、知识截止日期的回答可用于初步筛查。注意：此项容易被 system prompt 伪造。</p>
           </div>
         </div>
-      </div>
         <div class="info-item">
           <div class="info-icon">06</div>
           <div>
@@ -379,9 +468,76 @@ Q3: Who created you?</pre>
             <p>鸽巢原理组合题，需要深度推理。满血 Opus 答 21（正确），降智渠道答 29，严重降智答 34。可衡量模型思考预算是否被削减。</p>
           </div>
         </div>
+        <div class="info-item">
+          <div class="info-icon">07</div>
+          <div>
+            <h4>Base64 编解码</h4>
+            <p>Claude 分词器对 Base64 编码的中文解码有特定错误模式。通过对比解码结果与预期原文的相似度和错误特征，辅助判断模型身份。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Usage Guide -->
+    <section class="guide-section" id="guide">
+      <h3>使用说明</h3>
+      <div class="guide-content">
+        <div class="guide-block">
+          <h4>快速开始</h4>
+          <ol>
+            <li>在「API 配置」面板中填写 API Endpoint 和 API Key</li>
+            <li>选择正确的 API 格式（Anthropic 原生 / OpenAI 兼容）</li>
+            <li>填写要测试的模型名称（如 <code>claude-opus-4-6</code>）</li>
+            <li>点击「保存配置」将当前配置保存到本地（支持保存多组配置，通过下拉切换）</li>
+            <li>点击「测试连接」确认配置无误</li>
+            <li>点击「运行全部测试」开始鉴定，或单独运行某项测试</li>
+          </ol>
+        </div>
+        <div class="guide-block">
+          <h4>API 格式说明</h4>
+          <ul>
+            <li><strong>Anthropic 原生</strong> &mdash; 完整支持所有测试项目，包括 Extended Thinking（思考链检测和逻辑推理）。推荐使用。</li>
+            <li><strong>OpenAI 兼容</strong> &mdash; 适用于第三方代理/反代服务。思考链相关测试可能无法正常工作。</li>
+          </ul>
+        </div>
+        <div class="guide-block">
+          <h4>自由对话</h4>
+          <p>展开「自由对话」面板可直接与 API 对话，支持：</p>
+          <ul>
+            <li><strong>Streaming 输出</strong> &mdash; 实时流式输出，文本逐步呈现</li>
+            <li><strong>Thinking 模式</strong> &mdash; 开启后可查看模型的内部思考过程（需 Anthropic 原生 API）</li>
+            <li><strong>Raw 模式</strong> &mdash; 直接编辑发送的 JSON 请求体，适合高级调试和自定义参数</li>
+          </ul>
+        </div>
+        <div class="guide-block">
+          <h4>结果解读</h4>
+          <ul>
+            <li><strong>测试 01 - 中文引号</strong>：最可靠的 Claude 鉴定指标，100% 判定力。</li>
+            <li><strong>测试 02 - 乱码美咲</strong>：Opus 模型在特定日文场景的「指纹」，可区分 Opus 4.5/4.6。</li>
+            <li><strong>测试 03 - 中文思考链</strong>：目前只有 Opus 能遵循中文思考指令，强力 Opus 鉴定指标。</li>
+            <li><strong>测试 04 - 代码能力</strong>：通过代码质量和复杂度评估模型等级，辅助判断。</li>
+            <li><strong>测试 05 - 身份指纹</strong>：模型自报身份，仅供参考（可被 system prompt 伪造）。</li>
+            <li><strong>测试 06 - 逻辑推理</strong>：检测思考预算是否被削减。正确答案 21，错误答案 29/34 为降智特征。</li>
+            <li><strong>测试 07 - Base64 编解码</strong>：分词器指纹检测，通过 Base64 解码错误模式辅助判断模型类型。</li>
+          </ul>
+        </div>
+        <div class="guide-block">
+          <h4>注意事项</h4>
+          <ul>
+            <li>API Key 仅存储在浏览器本地 (localStorage)，不会发送到任何第三方服务。</li>
+            <li>单项测试无法作为最终判据，请综合多项结果判断。</li>
+            <li>测试 06 满血 Opus 需约 2 分钟思考时间，请耐心等待。</li>
+            <li>不同渠道的网络延迟和 token 限制可能影响测试结果。</li>
+          </ul>
+        </div>
       </div>
     </section>
   </main>
+
+  <!-- Back to Top -->
+  <button class="back-to-top" id="backToTop" onclick="scrollToTop()" title="回到顶部">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+  </button>
 
   <footer>
     <p>Claude Verifier &mdash; 开源工具，仅供学习研究</p>
