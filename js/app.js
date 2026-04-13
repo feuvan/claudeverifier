@@ -1282,7 +1282,7 @@ function toggleRawMode() {
     const config = getConfig();
     const template = config.format === 'anthropic' ? {
       model: config.model,
-      max_tokens: 4096,
+      thinking: { type: 'adaptive' },
       messages: [
         ...state.chatMessages,
         { role: 'user', content: normalInput.value || '你好' },
