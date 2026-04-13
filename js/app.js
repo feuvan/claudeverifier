@@ -775,78 +775,112 @@ const tests = {
     },
   },
 
-  // Test 7: Base64 Decode Detection
+  // Test 7: Base64 Model ID Encoding Detection
   7: {
-    name: 'Base64 编解码检测',
+    name: 'Base64 模型 ID 编码检测',
     async run() {
-      // 正确解码结果: "我爱人工智能，它让世界更了不起"
-      const b64Input = '5oiR54ix5Lq65bel5pm66IO977yM5a6D6K6p5LiW55WM5pu05LqG5LiN6LW3';
-      const correctDecode = '我爱人工智能，它让世界更了不起';
-
       const result = await callAPI([{
         role: 'user',
-        content: `请将以下 Base64 编码的字符串解码，直接输出解码后的原文，不要解释：\n\n${b64Input}`,
+        content: 'Tell me your model id encoded in base64, return in plain text and only the base64 encoded text.',
       }], { thinking: false });
 
       const text = result.text.trim();
 
-      // Remove surrounding quotes and whitespace for comparison
-      const cleaned = text.replace(/^["'`\s]+|["'`\s]+$/g, '').trim();
+      // Extract the base64 string: strip quotes, backticks, whitespace, markdown
+      const cleaned = text
+        .replace(/```[a-z]*\n?/g, '')
+        .replace(/^["'`\s]+|["'`\s]+$/g, '')
+        .trim();
 
-      // Calculate similarity to the correct answer
-      const correctChars = [...correctDecode];
-      const responseChars = [...cleaned];
-
-      // Character-level match count
-      let matchCount = 0;
-      const minLen = Math.min(correctChars.length, responseChars.length);
-      for (let i = 0; i < minLen; i++) {
-        if (correctChars[i] === responseChars[i]) matchCount++;
+      // Try to decode base64
+      let decoded = '';
+      let decodeOk = false;
+      try {
+        decoded = decodeURIComponent(
+          atob(cleaned)
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        decodeOk = true;
+      } catch {
+        try {
+          decoded = atob(cleaned);
+          decodeOk = true;
+        } catch {
+          decoded = '(无法解码 — 返回内容不是有效 Base64)';
+        }
       }
-      const similarity = correctChars.length > 0 ? matchCount / correctChars.length : 0;
 
-      // Check for common error patterns
-      const hasGarbled = /[\ufffd]/.test(cleaned);
-      const hasMojibake = /[\u00c0-\u00ff]{2,}/.test(cleaned);  // Latin mojibake
-      const hasPartialChinese = (cleaned.match(/[\u4e00-\u9fff]/g) || []).length;
-      const isExactMatch = cleaned === correctDecode;
-      const isCloseMatch = similarity >= 0.7;
+      // Analyze the decoded model id
+      const decodedLower = decoded.toLowerCase();
+      const configModel = (state.config.model || '').toLowerCase();
 
-      let status, analysis;
-      if (isExactMatch) {
-        status = 'pass';
-        analysis = {
-          type: 'info',
-          text: `解码完全正确!\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\nBase64 解码正确并不能排除或确认 Claude 身份 -- 多数主流模型在简单 Base64 解码任务上都可能正确。此项作为辅助参考。`,
-        };
-      } else if (isCloseMatch) {
-        status = 'warning';
-        analysis = {
-          type: 'info',
-          text: `解码基本正确，相似度 ${(similarity * 100).toFixed(0)}%。\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\n存在少量偏差，可能是分词器导致的细微错误。这种「接近但不完全正确」的模式在 Claude 中较常见。`,
-        };
-      } else if (hasPartialChinese >= 3) {
-        status = 'warning';
-        analysis = {
-          type: 'warn',
-          text: `解码部分正确，识别到 ${hasPartialChinese} 个中文字符，相似度 ${(similarity * 100).toFixed(0)}%。\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\n部分中文被正确解码但存在丢字或乱码，这是 LLM 分词器处理 Base64 的常见表现。`,
-        };
-      } else if (hasGarbled || hasMojibake) {
+      // Check if decoded result looks like a model identifier
+      const looksLikeModelId = /^[a-z0-9][\w.:\/-]*$/i.test(decoded) && decoded.length >= 3 && decoded.length <= 100;
+
+      // Check if it matches the configured model
+      const matchesConfig = configModel && decodedLower === configModel;
+
+      // Check if it contains known model family keywords
+      const knownFamilies = ['claude', 'gpt', 'gemini', 'llama', 'mistral', 'qwen', 'deepseek', 'o1', 'o3', 'o4'];
+      const matchedFamily = knownFamilies.find(f => decodedLower.includes(f));
+
+      // Verify base64 correctness: re-encode the decoded text and compare
+      let encodingCorrect = false;
+      if (decodeOk && decoded !== '(无法解码 — 返回内容不是有效 Base64)') {
+        try {
+          const reEncoded = btoa(unescape(encodeURIComponent(decoded)));
+          encodingCorrect = reEncoded === cleaned;
+        } catch { /* ignore */ }
+      }
+
+      let status, analysis, score;
+      if (!decodeOk) {
         status = 'fail';
+        score = 10;
         analysis = {
           type: 'fail',
-          text: `解码出现严重乱码。\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\n模型无法正确处理 Base64 中文解码，可能是较弱的模型或分词器不兼容。`,
+          text: `返回内容不是有效的 Base64 编码。\n原始回复: "${cleaned}"\n\n模型未能按要求返回 Base64 编码的文本。`,
         };
-      } else {
+      } else if (matchesConfig && encodingCorrect) {
+        status = 'pass';
+        score = 90;
+        analysis = {
+          type: 'pass',
+          text: `模型准确返回了自身 model id 的 Base64 编码!\n解码结果: "${decoded}"\n配置模型: "${state.config.model}"\nBase64 编码: 正确 ✓\n\n模型的自我认知与 Base64 编码能力均准确。`,
+        };
+      } else if (matchedFamily && encodingCorrect) {
+        status = 'pass';
+        score = 80;
+        analysis = {
+          type: 'pass',
+          text: `解码结果为已知模型标识: "${decoded}" (${matchedFamily} 系列)\nBase64 编码: 正确 ✓${configModel ? `\n配置模型: "${state.config.model}" (不完全匹配)` : ''}\n\n模型知道自己的身份并正确编码。`,
+        };
+      } else if (matchedFamily && !encodingCorrect) {
         status = 'warning';
+        score = 60;
         analysis = {
           type: 'warn',
-          text: `解码结果与预期不符，相似度 ${(similarity * 100).toFixed(0)}%。\n预期: "${correctDecode}"\n实际: "${cleaned}"\n\n需人工判断解码质量。`,
+          text: `解码结果包含模型标识: "${decoded}" (${matchedFamily} 系列)\n但 Base64 编码不够精确 — 解码后再重新编码与原始输出不一致。\n\n模型认知自身身份，但编码过程存在偏差。`,
+        };
+      } else if (looksLikeModelId) {
+        status = 'warning';
+        score = 50;
+        analysis = {
+          type: 'warn',
+          text: `解码结果看起来是模型标识: "${decoded}"\n但未匹配已知模型系列。${encodingCorrect ? '\nBase64 编码: 正确 ✓' : '\nBase64 编码: 存在偏差'}${configModel ? `\n配置模型: "${state.config.model}"` : ''}\n\n可能是未收录的模型名称，需人工确认。`,
+        };
+      } else {
+        status = 'fail';
+        score = 20;
+        analysis = {
+          type: 'fail',
+          text: `解码结果不像有效的模型标识: "${decoded}"\n原始 Base64: "${cleaned}"\n\n模型可能不清楚自己的 model id，或编码了其他内容。`,
         };
       }
 
-      const score = isExactMatch ? 80 : (isCloseMatch ? 60 : (hasPartialChinese >= 3 ? 40 : 20));
-      return { text, status, analysis, score };
+      return { text, decoded, status, analysis, score };
     },
   },
 };
@@ -899,6 +933,14 @@ function renderResult(testId, result) {
         thinkingEl.style.display = testId === 3 ? '' : 'none';
         thinkingEl.textContent = '(未获取到思考链内容)';
       }
+    }
+  }
+
+  // Decoded result (test 7)
+  if (testId === 7 && result.decoded) {
+    const decodedEl = document.getElementById('test7Decoded');
+    if (decodedEl) {
+      decodedEl.textContent = result.decoded;
     }
   }
 
