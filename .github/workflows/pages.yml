@@ -28,7 +28,9 @@ jobs:
           COMMIT=$(git rev-parse --short HEAD)
           DATE=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')
           REPO="${{ github.repository }}"
-          sed -i "s|<!-- BUILD_INFO -->|Updated ${DATE} (CST) · <a href=\"https://github.com/${REPO}/commit/${COMMIT}\">${COMMIT}</a>|" index.html
+          BUILD_HTML="Updated ${DATE} (CST) · <a href=\"https://github.com/${REPO}/commit/${COMMIT}\">${COMMIT}</a>"
+          sed -i "s|<!-- BUILD_INFO -->|${BUILD_HTML}|" index.html
+          sed -i "s|<!-- HEADER_BUILD_INFO -->|${BUILD_HTML}|" index.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

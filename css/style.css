@@ -149,6 +149,20 @@ header {
   padding: 6px 14px;
   border-radius: 20px;
   border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.header-build {
+  font-size: 11px;
+  opacity: 0.5;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  width: 100%;
+  text-align: center;
+  margin-top: 2px;
+}
+
+.header-build:empty {
+  display: none;
 }
 
 .header-badge a {
