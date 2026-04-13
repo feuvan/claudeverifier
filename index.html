@@ -398,13 +398,15 @@ Q3: Who created you?</pre>
         </div>
         <div class="card-body">
           <div class="test-desc">
-            <p>要求模型将自己的 model id 以 Base64 编码返回。测试模型的<strong>自我认知准确性</strong>与<strong>Base64 编码能力</strong>。自动解码返回内容，验证模型是否真正知道自己的身份标识。</p>
+            <p>启用 <strong>Adaptive Thinking</strong> (budget 10k tokens)，要求模型将自己的 model id 以 Base64 编码返回。自动解码返回内容，与 <code>claude-opus-4-6</code> 比对，验证模型的<strong>自我认知</strong>与<strong>编码能力</strong>。</p>
           </div>
           <div class="test-prompt">
             <div class="prompt-label">测试 Prompt</div>
             <pre>Tell me your model id encoded in base64, return in plain text and only the base64 encoded text.</pre>
           </div>
           <div class="test-result hidden" id="test7Result">
+            <div class="result-label">思考过程</div>
+            <pre class="result-thinking" id="test7Thinking" style="display:none"></pre>
             <div class="result-label">模型回复 (Base64)</div>
             <pre class="result-content" id="test7Response"></pre>
             <div class="result-label" style="margin-top:12px">自动解码结果</div>

@@ -101,18 +101,18 @@ function toggleKeyVisibility() {
 }
 
 // ---- API Client ----
-async function callAPI(messages, { system, streaming = true, thinking = true } = {}) {
+async function callAPI(messages, { system, streaming = true, thinking = true, thinkingBudget, onText, onThinking } = {}) {
   const config = getConfig();
   if (!config.apiKey) throw new Error('请先填写 API Key');
 
   if (config.format === 'anthropic') {
-    return callAnthropicAPI(config, messages, { system, streaming, thinking });
+    return callAnthropicAPI(config, messages, { system, streaming, thinking, thinkingBudget, onText, onThinking });
   } else {
     return callOpenAIAPI(config, messages, { system, streaming, thinking });
   }
 }
 
-async function callAnthropicAPI(config, messages, { system, streaming, thinking }) {
+async function callAnthropicAPI(config, messages, { system, streaming, thinking, thinkingBudget, onText, onThinking }) {
   const body = {
     model: config.model,
     max_tokens: 4096,
@@ -122,7 +122,7 @@ async function callAnthropicAPI(config, messages, { system, streaming, thinking 
   if (system) body.system = system;
 
   if (thinking) {
-    body.thinking = { type: 'enabled', budget_tokens: 4096 };
+    body.thinking = { type: 'enabled', budget_tokens: thinkingBudget || 4096 };
     // When thinking is enabled, max_tokens must be larger
     body.max_tokens = 16000;
   }
@@ -152,7 +152,7 @@ async function callAnthropicAPI(config, messages, { system, streaming, thinking 
       throw new Error(`API Error ${response.status}: ${err}`);
     }
 
-    return parseAnthropicStream(response);
+    return parseAnthropicStream(response, { onText, onThinking });
   }
 
   const response = await fetch(`${config.endpoint}/v1/messages`, {
@@ -775,16 +775,42 @@ const tests = {
     },
   },
 
-  // Test 7: Base64 Model ID Encoding Detection
+  // Test 7: Base64 Model ID Encoding Detection (adaptive thinking + max effort)
   7: {
     name: 'Base64 模型 ID 编码检测',
     async run() {
+      const EXPECTED_MODEL = 'claude-opus-4-6';
+      const EXPECTED_B64 = btoa(EXPECTED_MODEL); // Y2xhdWRlLW9wdXMtNC02
+
+      // Show streaming progress in the result area
+      const resultEl = document.getElementById('test7Result');
+      const responseEl = document.getElementById('test7Response');
+      const decodedEl = document.getElementById('test7Decoded');
+      const thinkingEl = document.getElementById('test7Thinking');
+      resultEl.classList.remove('hidden');
+      responseEl.textContent = '';
+      decodedEl.textContent = '';
+      if (thinkingEl) { thinkingEl.style.display = 'none'; thinkingEl.textContent = ''; }
+
       const result = await callAPI([{
         role: 'user',
         content: 'Tell me your model id encoded in base64, return in plain text and only the base64 encoded text.',
-      }], { thinking: false });
+      }], {
+        thinking: true,
+        thinkingBudget: 10000,
+        onText(text) {
+          responseEl.textContent = text;
+        },
+        onThinking(thinking) {
+          if (thinkingEl) {
+            thinkingEl.style.display = '';
+            thinkingEl.textContent = thinking;
+          }
+        },
+      });
 
       const text = result.text.trim();
+      responseEl.textContent = text;
 
       // Extract the base64 string: strip quotes, backticks, whitespace, markdown
       const cleaned = text
@@ -812,19 +838,10 @@ const tests = {
         }
       }
 
+      decodedEl.textContent = decoded;
+
       // Analyze the decoded model id
       const decodedLower = decoded.toLowerCase();
-      const configModel = (state.config.model || '').toLowerCase();
-
-      // Check if decoded result looks like a model identifier
-      const looksLikeModelId = /^[a-z0-9][\w.:\/-]*$/i.test(decoded) && decoded.length >= 3 && decoded.length <= 100;
-
-      // Check if it matches the configured model
-      const matchesConfig = configModel && decodedLower === configModel;
-
-      // Check if it contains known model family keywords
-      const knownFamilies = ['claude', 'gpt', 'gemini', 'llama', 'mistral', 'qwen', 'deepseek', 'o1', 'o3', 'o4'];
-      const matchedFamily = knownFamilies.find(f => decodedLower.includes(f));
 
       // Verify base64 correctness: re-encode the decoded text and compare
       let encodingCorrect = false;
@@ -835,6 +852,12 @@ const tests = {
         } catch { /* ignore */ }
       }
 
+      // Compare with expected model id (claude-opus-4-6)
+      const isExactMatch = decodedLower === EXPECTED_MODEL;
+      const b64ExactMatch = cleaned === EXPECTED_B64;
+      const containsClaude = decodedLower.includes('claude');
+      const looksLikeModelId = /^[a-z0-9][\w.:\/-]*$/i.test(decoded) && decoded.length >= 3 && decoded.length <= 100;
+
       let status, analysis, score;
       if (!decodeOk) {
         status = 'fail';
@@ -843,44 +866,51 @@ const tests = {
           type: 'fail',
           text: `返回内容不是有效的 Base64 编码。\n原始回复: "${cleaned}"\n\n模型未能按要求返回 Base64 编码的文本。`,
         };
-      } else if (matchesConfig && encodingCorrect) {
+      } else if (isExactMatch && encodingCorrect) {
         status = 'pass';
-        score = 90;
+        score = 95;
         analysis = {
           type: 'pass',
-          text: `模型准确返回了自身 model id 的 Base64 编码!\n解码结果: "${decoded}"\n配置模型: "${state.config.model}"\nBase64 编码: 正确 ✓\n\n模型的自我认知与 Base64 编码能力均准确。`,
+          text: `完美匹配! 模型准确返回了 ${EXPECTED_MODEL} 的 Base64 编码。\n\n解码结果: "${decoded}"\n预期模型: "${EXPECTED_MODEL}"\n预期 Base64: ${EXPECTED_B64}\n实际 Base64: ${cleaned}\nBase64 编码: 正确 ✓`,
         };
-      } else if (matchedFamily && encodingCorrect) {
-        status = 'pass';
-        score = 80;
-        analysis = {
-          type: 'pass',
-          text: `解码结果为已知模型标识: "${decoded}" (${matchedFamily} 系列)\nBase64 编码: 正确 ✓${configModel ? `\n配置模型: "${state.config.model}" (不完全匹配)` : ''}\n\n模型知道自己的身份并正确编码。`,
-        };
-      } else if (matchedFamily && !encodingCorrect) {
+      } else if (isExactMatch && !encodingCorrect) {
         status = 'warning';
-        score = 60;
+        score = 70;
         analysis = {
           type: 'warn',
-          text: `解码结果包含模型标识: "${decoded}" (${matchedFamily} 系列)\n但 Base64 编码不够精确 — 解码后再重新编码与原始输出不一致。\n\n模型认知自身身份，但编码过程存在偏差。`,
+          text: `模型 ID 正确但 Base64 编码有偏差。\n\n解码结果: "${decoded}" ✓\n预期 Base64: ${EXPECTED_B64}\n实际 Base64: ${cleaned} ✗\n\n模型知道自己的身份，但编码过程不够精确。`,
         };
-      } else if (looksLikeModelId) {
+      } else if (containsClaude && encodingCorrect) {
+        status = 'warning';
+        score = 65;
+        analysis = {
+          type: 'warn',
+          text: `解码结果包含 Claude 标识但非预期 model id。\n\n解码结果: "${decoded}"\n预期模型: "${EXPECTED_MODEL}"\nBase64 编码: 正确 ✓\n\n模型返回了不同的 Claude model id 变体。`,
+        };
+      } else if (containsClaude && !encodingCorrect) {
         status = 'warning';
         score = 50;
         analysis = {
           type: 'warn',
-          text: `解码结果看起来是模型标识: "${decoded}"\n但未匹配已知模型系列。${encodingCorrect ? '\nBase64 编码: 正确 ✓' : '\nBase64 编码: 存在偏差'}${configModel ? `\n配置模型: "${state.config.model}"` : ''}\n\n可能是未收录的模型名称，需人工确认。`,
+          text: `解码结果包含 Claude 标识，但编码有偏差。\n\n解码结果: "${decoded}"\n预期模型: "${EXPECTED_MODEL}"\n预期 Base64: ${EXPECTED_B64}\n实际 Base64: ${cleaned}\n\n模型大致知道自身身份，但 ID 和编码均不精确。`,
+        };
+      } else if (looksLikeModelId) {
+        status = 'fail';
+        score = 30;
+        analysis = {
+          type: 'fail',
+          text: `解码结果是模型标识但不含 Claude 关键词。\n\n解码结果: "${decoded}"\n预期模型: "${EXPECTED_MODEL}"\n${encodingCorrect ? 'Base64 编码: 正确 ✓' : 'Base64 编码: 存在偏差'}\n\n模型可能在伪装身份或使用了非标准名称。`,
         };
       } else {
         status = 'fail';
-        score = 20;
+        score = 10;
         analysis = {
           type: 'fail',
-          text: `解码结果不像有效的模型标识: "${decoded}"\n原始 Base64: "${cleaned}"\n\n模型可能不清楚自己的 model id，或编码了其他内容。`,
+          text: `解码结果不像有效的模型标识。\n\n解码结果: "${decoded}"\n原始 Base64: "${cleaned}"\n预期模型: "${EXPECTED_MODEL}"\n\n模型可能不清楚自己的 model id，或编码了其他内容。`,
         };
       }
 
-      return { text, decoded, status, analysis, score };
+      return { text, decoded, thinking: result.thinking, status, analysis, score };
     },
   },
 };
@@ -922,8 +952,8 @@ function renderResult(testId, result) {
     responseEl.textContent = result.text || '(empty response)';
   }
 
-  // Thinking (test 3 and test 6)
-  if (testId === 3 || testId === 6) {
+  // Thinking (test 3, 6, and 7)
+  if (testId === 3 || testId === 6 || testId === 7) {
     const thinkingEl = document.getElementById(`test${testId}Thinking`);
     if (thinkingEl) {
       if (result.thinking) {
