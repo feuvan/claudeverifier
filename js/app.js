@@ -1566,10 +1566,10 @@ function showToast(message) {
 document.addEventListener('DOMContentLoaded', () => {
   loadConfig();
 
-  // Chat input: Enter to send, Shift+Enter for newline
+  // Chat input: Cmd/Ctrl+Enter to send (avoids IME composition issues with Enter)
   const chatInput = document.getElementById('chatInput');
   chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       sendChatMessage();
     }
