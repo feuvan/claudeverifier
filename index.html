@@ -395,13 +395,13 @@ Q3: Who created you?</pre>
         </div>
       </div>
 
-      <!-- Test 7: Base64 Model ID Encoding -->
+      <!-- Test 7: Base64 Chinese Decode Detection -->
       <div class="test-card" id="test7Card">
         <div class="card-header">
           <div class="test-number">07</div>
           <div class="test-info">
-            <h3>Base64 模型 ID 编码检测</h3>
-            <p class="test-tag">自我认知 × 编码能力</p>
+            <h3>Base64 编解码检测</h3>
+            <p class="test-tag">分词器指纹检测</p>
           </div>
           <div class="test-status" id="test7Status">
             <span class="status-dot"></span>
@@ -410,19 +410,19 @@ Q3: Who created you?</pre>
         </div>
         <div class="card-body">
           <div class="test-desc">
-            <p>要求模型将自己的 model id 以 Base64 编码返回。自动解码返回内容，与 <code>claude-opus-4-6</code> 比对，验证模型的<strong>自我认知</strong>与<strong>编码能力</strong>。</p>
+            <p>要求模型解码一段 Base64 字符串。Claude 的分词器对 Base64 有<strong>特定的解码错误模式</strong>（如中文解码乱码、丢字），而 GPT 系列等模型的错误模式不同。通过比对错误特征可辅助鉴别模型。</p>
           </div>
           <div class="test-prompt">
             <div class="prompt-label">测试 Prompt</div>
-            <pre>Tell me your model id encoded in base64, return in plain text and only the base64 encoded text.</pre>
+            <pre>请将以下 Base64 编码的字符串解码，直接输出解码后的原文，不要解释：
+
+5oiR54ix5Lq65bel5pm66IO977yM5a6D6K6p5LiW55WM5pu05LqG5LiN6LW3</pre>
           </div>
           <div class="test-result hidden" id="test7Result">
             <div class="result-label">思考过程</div>
             <pre class="result-content result-thinking" id="test7Thinking" style="display:none"></pre>
-            <div class="result-label">模型回复 (Base64)</div>
+            <div class="result-label">模型回复</div>
             <pre class="result-content" id="test7Response"></pre>
-            <div class="result-label" style="margin-top:12px">自动解码结果</div>
-            <pre class="result-content" id="test7Decoded" style="color:#7ee787"></pre>
             <div class="result-analysis" id="test7Analysis"></div>
             <div class="test-timing" id="test7Timing" style="display:none"></div>
           </div>
