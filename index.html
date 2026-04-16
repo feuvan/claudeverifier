@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude Model Verifier - Claude 模型真伪鉴定</title>
+  <title>Claude Model Verifier - Opus 4.6/4.7 检测</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
 </head>
@@ -202,7 +202,7 @@
           <div class="test-number">02</div>
           <div class="test-info">
             <h3>乱码美咲检测</h3>
-            <p class="test-tag">鉴定 Opus 4.5 特征</p>
+            <p class="test-tag">鉴定 Opus 4.5/4.6/4.7 特征</p>
           </div>
           <div class="test-status" id="test2Status">
             <span class="status-dot"></span>
@@ -211,7 +211,7 @@
         </div>
         <div class="card-body">
           <div class="test-desc">
-            <p>要求模型写日本大学故事并包含10位女性角色的罗马音。Opus 4.6 的典型表现：<strong>首个角色大概率叫 XX美咲(Misaki)</strong>，无乱码，且完整输出 10 个罗马音。Opus 4.5 则会额外出现<strong>乱码错误</strong>。</p>
+            <p>要求模型写日本大学故事并包含10位女性角色的罗马音。Opus 4.6/4.7 的典型表现：<strong>首个角色大概率叫 XX美咲(Misaki)</strong>，无乱码，且完整输出 10 个罗马音。Opus 4.5 则会额外出现<strong>乱码错误</strong>。</p>
           </div>
           <div class="test-prompt">
             <div class="prompt-label">测试 Prompt</div>
@@ -532,7 +532,7 @@ Q3: Who created you?</pre>
           <h4>结果解读</h4>
           <ul>
             <li><strong>测试 01 - 中文引号</strong>：最可靠的 Claude 鉴定指标，100% 判定力。</li>
-            <li><strong>测试 02 - 乱码美咲</strong>：Opus 模型在特定日文场景的「指纹」，可区分 Opus 4.5/4.6。</li>
+            <li><strong>测试 02 - 乱码美咲</strong>：Opus 模型在特定日文场景的「指纹」，可区分 Opus 4.5/4.6/4.7。</li>
             <li><strong>测试 03 - 中文思考链</strong>：目前只有 Opus 能遵循中文思考指令，强力 Opus 鉴定指标。</li>
             <li><strong>测试 04 - 代码能力</strong>：通过代码质量和复杂度评估模型等级，辅助判断。</li>
             <li><strong>测试 05 - 身份指纹</strong>：模型自报身份，仅供参考（可被 system prompt 伪造）。</li>

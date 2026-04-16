@@ -119,10 +119,10 @@ async function fetchModels() {
     if (!models.length) { showToast('未获取到模型列表'); return; }
 
     // Find closest match to "opus-4-6"
-    const target = 'opus-4-6';
     const score = (id) => {
       const lower = id.toLowerCase();
-      if (lower.includes(target)) return 100;
+      if (lower.includes('opus-4-7')) return 110;
+      if (lower.includes('opus-4-6')) return 100;
       if (lower.includes('opus')) return 50;
       if (lower.includes('claude')) return 10;
       return 0;
@@ -472,7 +472,7 @@ const tests = {
         status = 'pass';
         analysis = {
           type: 'pass',
-          text: `符合 Opus 4.6 特征! 首位角色命中 Misaki 模式，无乱码，且完整输出 ${names.length} 个罗马音姓名。这是 Opus 4.6 的典型表现。`,
+          text: `符合 Opus 4.6/4.7 特征! 首位角色命中 Misaki 模式，无乱码，且完整输出 ${names.length} 个罗马音姓名。这是 Opus 4.6/4.7 的典型表现。`,
         };
       } else if (hasMisaki && hasGarbled) {
         status = 'warning';
