@@ -100,6 +100,46 @@ function toggleKeyVisibility() {
   input.type = input.type === 'password' ? 'text' : 'password';
 }
 
+// ---- Fetch Models ----
+async function fetchModels() {
+  const config = getConfig();
+  if (!config.apiKey) { showToast('请先填写 API Key'); return; }
+
+  const btn = document.querySelector('.btn-fetch-models');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  try {
+    const headers = { 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01' };
+    const res = await fetch(`${config.endpoint}/v1/models`, { headers });
+    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+    const data = await res.json();
+
+    const models = (data.data || []).map(m => m.id);
+    if (!models.length) { showToast('未获取到模型列表'); return; }
+
+    // Find closest match to "opus-4-6"
+    const target = 'opus-4-6';
+    const score = (id) => {
+      const lower = id.toLowerCase();
+      if (lower.includes(target)) return 100;
+      if (lower.includes('opus')) return 50;
+      if (lower.includes('claude')) return 10;
+      return 0;
+    };
+    models.sort((a, b) => score(b) - score(a));
+    const best = models[0];
+
+    document.getElementById('modelName').value = best;
+    showToast(`已选择模型: ${best}`);
+  } catch (e) {
+    showToast('拉取模型失败: ' + e.message);
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
 // ---- API Client ----
 async function callAPI(messages, { system, streaming = true, thinking = true, onText, onThinking } = {}) {
   const config = getConfig();

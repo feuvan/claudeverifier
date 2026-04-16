@@ -351,6 +351,24 @@ main {
   color: var(--text-muted);
 }
 
+.model-input-wrap {
+  position: relative;
+}
+
+.model-input-wrap input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+.model-input-wrap .btn-fetch-models.loading svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: translateY(-50%) rotate(0deg); }
+  to { transform: translateY(-50%) rotate(360deg); }
+}
+
 .key-input-wrap {
   position: relative;
 }
