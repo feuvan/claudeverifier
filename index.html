@@ -173,11 +173,11 @@
         </div>
         <div class="card-body">
           <div class="test-desc">
-            <p>Claude 全系列模型 <strong>无法输出中文引号 <code>""</code></strong>（安全分词器限制）。如果模型能输出中文引号，则 100% 不是 Claude。</p>
+            <p>Claude 4.6 及更早版本<strong>无法输出中文引号 <code>“”</code></strong>（安全分词器限制），而 <strong>Opus 4.7 已能正确输出</strong>。可用于区分模型版本。</p>
           </div>
           <div class="test-prompt">
             <div class="prompt-label">测试 Prompt</div>
-            <pre>请在下面的句子中使用中文引号（即 "" 这种引号）：他说____你好____。请直接输出完整句子。</pre>
+            <pre>请在下面的句子中使用中文引号（即 “” 这种引号）：他说____你好____。请直接输出完整句子。</pre>
           </div>
           <div class="test-result hidden" id="test1Result">
             <div class="result-label">思考过程</div>
@@ -450,7 +450,7 @@ Q3: Who created you?</pre>
           <div class="info-icon">01</div>
           <div>
             <h4>中文引号</h4>
-            <p>Claude 的安全分词器会过滤中文引号 <code>""</code>，这是 Claude 全系列的硬性特征。能输出中文引号 = 100% 假 Claude。</p>
+            <p>Claude 4.6 及更早版本的分词器会过滤中文引号 <code>“”</code>，Opus 4.7 已解除此限制。可用于区分模型版本。</p>
           </div>
         </div>
         <div class="info-item">
@@ -531,7 +531,7 @@ Q3: Who created you?</pre>
         <div class="guide-block">
           <h4>结果解读</h4>
           <ul>
-            <li><strong>测试 01 - 中文引号</strong>：最可靠的 Claude 鉴定指标，100% 判定力。</li>
+            <li><strong>测试 01 - 中文引号</strong>：可区分 Claude 4.6 及更早版本（无法输出）与 Opus 4.7（可输出）。</li>
             <li><strong>测试 02 - 乱码美咲</strong>：Opus 模型在特定日文场景的「指纹」，可区分 Opus 4.5/4.6/4.7。</li>
             <li><strong>测试 03 - 中文思考链</strong>：目前只有 Opus 能遵循中文思考指令，强力 Opus 鉴定指标。</li>
             <li><strong>测试 04 - 代码能力</strong>：通过代码质量和复杂度评估模型等级，辅助判断。</li>

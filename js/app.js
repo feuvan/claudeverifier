@@ -410,25 +410,28 @@ const tests = {
 
       const text = result.text;
       const hasChinaQuote = /[\u201c\u201d\u300c\u300d\u300e\u300f]/.test(text);
-      // Also check for the specific "" pair
       const hasFullWidthQuote = text.includes('\u201c') || text.includes('\u201d');
+      const hasQuotes = hasChinaQuote || hasFullWidthQuote;
 
-      let status, analysis;
-      if (hasChinaQuote || hasFullWidthQuote) {
-        status = 'fail';
+      let status, analysis, score;
+      if (hasQuotes) {
+        // 4.7 can output Chinese quotes; older versions cannot
+        status = 'pass';
+        score = 80;
         analysis = {
-          type: 'fail',
-          text: '检测到中文引号! 这 100% 不是 Claude 模型。真正的 Claude 无法输出中文引号 \u201c\u201d，这是其安全分词器的硬性限制。',
+          type: 'pass',
+          text: '检测到中文引号 \u201c\u201d。Opus 4.7 已能正确输出中文引号，而 4.6 及更早版本因分词器限制无法输出。此结果符合 Opus 4.7 特征，也需结合其他测试综合判断。',
         };
       } else {
         status = 'pass';
+        score = 100;
         analysis = {
           type: 'pass',
-          text: '未检测到中文引号。符合 Claude 的行为特征 -- Claude 的安全分词器会过滤中文引号。',
+          text: '未检测到中文引号。符合 Claude 4.6 及更早版本的行为特征（安全分词器会过滤中文引号）。',
         };
       }
 
-      return { text, thinking: result.thinking, status, analysis, score: status === 'pass' ? 100 : 0, timing: calcTiming(stream) };
+      return { text, thinking: result.thinking, status, analysis, score, timing: calcTiming(stream) };
     },
   },
 
@@ -1165,9 +1168,7 @@ function showVerdict() {
 
   // Determine verdict
   let verdict;
-  if (test1 && test1.status === 'fail') {
-    verdict = 'not_claude';
-  } else if (test3 && test3.status === 'pass' && test1 && test1.status === 'pass' && isFullPowerOpus) {
+  if (test3 && test3.status === 'pass' && test1 && test1.status === 'pass' && isFullPowerOpus) {
     verdict = 'real_opus_full';
   } else if (test3 && test3.status === 'pass' && test1 && test1.status === 'pass') {
     verdict = isDegradedOpus ? 'real_opus_degraded' : 'real_opus';
@@ -1186,7 +1187,7 @@ function showVerdict() {
       banner.classList.add('verdict-pass');
       icon.textContent = '\u2705';
       title.textContent = '高度可信: 满血 Claude Opus';
-      desc.textContent = '通过了中文引号、中文思考链和逻辑推理检测，这是具备完整思考预算的真正 Opus 模型。';
+      desc.textContent = '通过了中文思考链和逻辑推理检测，这是具备完整思考预算的真正 Opus 模型。';
       score.textContent = `${avgScore}%`;
       break;
     case 'real_opus_degraded':
@@ -1200,7 +1201,7 @@ function showVerdict() {
       banner.classList.add('verdict-pass');
       icon.textContent = '\u2705';
       title.textContent = '高度可信: 真 Claude Opus';
-      desc.textContent = '通过了中文引号检测和中文思考链检测，强力指标表明这是真正的 Opus 模型。';
+      desc.textContent = '通过了中文思考链检测，强力指标表明这是真正的 Opus 模型。';
       score.textContent = `${avgScore}%`;
       break;
     case 'likely_claude':
@@ -1208,13 +1209,6 @@ function showVerdict() {
       icon.textContent = '\u{1F7E1}';
       title.textContent = '可能是 Claude，但无法确认是 Opus';
       desc.textContent = '通过了中文引号检测（确认是 Claude），但未通过 Opus 专属测试。可能是 Sonnet 或其他 Claude 变体。';
-      score.textContent = `${avgScore}%`;
-      break;
-    case 'not_claude':
-      banner.classList.add('verdict-fail');
-      icon.textContent = '\u274C';
-      title.textContent = '判定: 不是 Claude';
-      desc.textContent = '检测到中文引号输出，这是 Claude 全系列不可能产生的行为，100% 不是 Claude 模型。';
       score.textContent = `${avgScore}%`;
       break;
     case 'likely_fake':
