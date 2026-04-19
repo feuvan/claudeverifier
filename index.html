@@ -415,7 +415,8 @@ Q3: Who created you?</pre>
         </div>
         <div class="card-body">
           <div class="test-desc">
-            <p>根据 <a href="https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking" target="_blank" rel="noopener">Anthropic 官方文档</a>：<strong>Opus 4.7 只支持 <code>thinking: {type: "adaptive"}</code></strong>，显式传入 <code>thinking: {type: "enabled"}</code> 会返回 <strong>400 错误</strong>；而 Opus 4.6 则同时接受两种模式。通过这个 API 请求特征可精准区分 4.6 与 4.7。</p>
+            <p>根据 <a href="https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking" target="_blank" rel="noopener">Anthropic 官方文档</a>：<strong>Opus 4.7 只支持 <code>thinking: {type: "adaptive"}</code></strong>，直连 Anthropic 时显式传入 <code>thinking: {type: "enabled"}</code> 会返回 <strong>400 错误</strong>；而 Opus 4.6 则同时接受两种模式。通过这个 API 请求特征可辅助区分 4.6 与 4.7。</p>
+            <p style="margin-top:8px;color:#b8b8c8;font-size:13px">⚠️ 注意：部分中转站会对请求做预处理（如自动将 <code>enabled</code> 映射为 <code>adaptive</code>），此时 4.7 也可能返回成功。因此 400 错误是 4.7 的强信号，但 <strong>200 成功不能排除 4.7</strong>，需结合其他测试综合判断。</p>
           </div>
           <div class="test-prompt">
             <div class="prompt-label">测试 Request Body</div>
@@ -541,7 +542,7 @@ Q3: Who created you?</pre>
           <div class="info-icon">08</div>
           <div>
             <h4>Adaptive Thinking 模式</h4>
-            <p>Opus 4.7 只支持 <code>thinking.type: "adaptive"</code>，传入 <code>"enabled"</code> 会返回 400；Opus 4.6 两种模式都接受。这是区分 4.6 与 4.7 最可靠的 API 请求级特征。</p>
+            <p>Opus 4.7 只支持 <code>thinking.type: "adaptive"</code>，直连时传入 <code>"enabled"</code> 会返回 400；Opus 4.6 两种模式都接受。部分中转站会自动映射 enabled→adaptive，200 成功不能排除 4.7。</p>
           </div>
         </div>
       </div>
@@ -587,7 +588,7 @@ Q3: Who created you?</pre>
             <li><strong>测试 05 - 身份指纹</strong>：模型自报身份，仅供参考（可被 system prompt 伪造）。</li>
             <li><strong>测试 06 - 逻辑推理</strong>：检测思考预算是否被削减。正确答案 21，错误答案 29/34 为降智特征。</li>
             <li><strong>测试 07 - Base64 编解码</strong>：分词器指纹检测，通过 Base64 解码错误模式辅助判断模型类型。</li>
-            <li><strong>测试 08 - Adaptive Thinking 模式</strong>：API 请求级特征。Opus 4.7 拒绝 <code>thinking.type: "enabled"</code>（400 错误），Opus 4.6 接受；是区分 4.6/4.7 的决定性指标。</li>
+            <li><strong>测试 08 - Adaptive Thinking 模式</strong>：API 请求级特征。直连 Anthropic 时 Opus 4.7 会拒绝 <code>thinking.type: "enabled"</code>（400 错误），Opus 4.6 则接受。注意部分中转站会自动把 enabled 映射为 adaptive，这种情况下 4.7 也会返回 200，需结合其他测试判断。</li>
           </ul>
         </div>
         <div class="guide-block">

@@ -1070,7 +1070,7 @@ const tests = {
         score = 100;
         analysis = {
           type: 'pass',
-          text: `HTTP 400 且错误信息提到 adaptive / thinking.type。\n\n这是 Opus 4.7 的决定性特征：官方文档明确指出 4.7 只支持 thinking.type="adaptive"，显式传入 "enabled" 会被拒绝。\n\n结论: 该模型大概率是 Claude Opus 4.7。`,
+          text: `HTTP 400 且错误信息提到 adaptive / thinking.type。\n\n这是 Opus 4.7 的强特征：官方文档明确指出 4.7 只支持 thinking.type="adaptive"，显式传入 "enabled" 会被拒绝。\n\n结论: 该模型大概率是 Claude Opus 4.7（或后端直连 Anthropic 的 4.7）。`,
         };
       } else if (httpStatus === 400) {
         status = 'warning';
@@ -1080,11 +1080,11 @@ const tests = {
           text: `HTTP 400 但错误信息未明确提到 adaptive / thinking.type。\n\n4.7 对 "enabled" 会返回 400，但也可能是其他参数校验失败。请人工确认错误信息。`,
         };
       } else if (httpStatus >= 200 && httpStatus < 300) {
-        status = 'pass';
-        score = 100;
+        status = 'warning';
+        score = 60;
         analysis = {
           type: 'info',
-          text: `请求被成功接受 (HTTP ${httpStatus})。\n\nOpus 4.6 及更早版本同时支持 thinking.type="enabled" 和 "adaptive"。请求成功说明该模型接受显式 enabled 模式。\n\n结论: 该模型大概率是 Claude Opus 4.6 或更早版本（非 4.7）。`,
+          text: `请求被成功接受 (HTTP ${httpStatus})。\n\n两种可能:\n1. 模型是 Opus 4.6 或更早版本（原生支持 thinking.type="enabled"）。\n2. 模型是 Opus 4.7，但中转站在转发前把 enabled 自动映射为 adaptive，规避了 400。\n\n因此 200 成功不能排除 4.7，需结合其他测试（如中文引号检测）综合判断。`,
         };
       } else {
         status = 'warning';
