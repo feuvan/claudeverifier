@@ -981,9 +981,133 @@ const tests = {
       return { text, thinking: result.thinking, status, analysis, score, timing: calcTiming(stream) };
     },
   },
+
+  // Test 8: Adaptive Thinking Only (distinguishes Opus 4.7 from 4.6)
+  8: {
+    name: 'Adaptive Thinking 模式检测',
+    async run() {
+      const config = getConfig();
+      if (config.format !== 'anthropic') {
+        return {
+          text: '此测试仅支持 Anthropic 原生 API 格式。',
+          status: 'warning',
+          analysis: {
+            type: 'warn',
+            text: '该测试直接探测 Anthropic /v1/messages 的请求参数校验行为，需要 Anthropic 原生 API 格式。',
+          },
+          score: 50,
+          timing: { total: 0, ttft: null, generation: null },
+        };
+      }
+
+      const resultEl = document.getElementById('test8Result');
+      resultEl.classList.remove('hidden');
+      const responseEl = document.getElementById('test8Response');
+      if (responseEl) responseEl.textContent = '正在发送 thinking.type=enabled 探测请求...';
+      const start = performance.now();
+
+      const body = {
+        model: config.model,
+        max_tokens: 2048,
+        thinking: { type: 'enabled', budget_tokens: 1024 },
+        messages: [{ role: 'user', content: 'Hi' }],
+      };
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': config.apiKey,
+        'anthropic-version': '2023-06-01',
+      };
+
+      let httpStatus = null;
+      let rawBody = '';
+      let parsedError = null;
+      let networkError = null;
+
+      try {
+        const response = await fetch(`${config.endpoint}/v1/messages`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+        httpStatus = response.status;
+        rawBody = await response.text();
+        try { parsedError = JSON.parse(rawBody); } catch (_) { /* keep raw */ }
+      } catch (e) {
+        networkError = e.message;
+      }
+
+      const total = performance.now() - start;
+      const timing = { total, ttft: null, generation: null };
+
+      if (networkError) {
+        return {
+          text: `网络错误: ${networkError}`,
+          status: 'warning',
+          analysis: {
+            type: 'warn',
+            text: `请求未能送达，无法判断 API 对 thinking.type=enabled 的响应。错误: ${networkError}`,
+          },
+          score: 50,
+          timing,
+        };
+      }
+
+      const errMessage = (parsedError?.error?.message || rawBody || '').toString();
+      const mentionsAdaptive =
+        /adaptive/i.test(errMessage) ||
+        /only.*adaptive/i.test(errMessage) ||
+        /thinking\.type/i.test(errMessage);
+
+      // Summarize response for display
+      const summary = httpStatus >= 400
+        ? `HTTP ${httpStatus}\n${rawBody.slice(0, 800)}`
+        : `HTTP ${httpStatus} (请求被接受)\n${rawBody.slice(0, 400)}...`;
+
+      let status, analysis, score;
+      if (httpStatus === 400 && mentionsAdaptive) {
+        status = 'pass';
+        score = 100;
+        analysis = {
+          type: 'pass',
+          text: `HTTP 400 且错误信息提到 adaptive / thinking.type。\n\n这是 Opus 4.7 的决定性特征：官方文档明确指出 4.7 只支持 thinking.type="adaptive"，显式传入 "enabled" 会被拒绝。\n\n结论: 该模型大概率是 Claude Opus 4.7。`,
+        };
+      } else if (httpStatus === 400) {
+        status = 'warning';
+        score = 70;
+        analysis = {
+          type: 'warn',
+          text: `HTTP 400 但错误信息未明确提到 adaptive / thinking.type。\n\n4.7 对 "enabled" 会返回 400，但也可能是其他参数校验失败。请人工确认错误信息。`,
+        };
+      } else if (httpStatus >= 200 && httpStatus < 300) {
+        status = 'pass';
+        score = 100;
+        analysis = {
+          type: 'info',
+          text: `请求被成功接受 (HTTP ${httpStatus})。\n\nOpus 4.6 及更早版本同时支持 thinking.type="enabled" 和 "adaptive"。请求成功说明该模型接受显式 enabled 模式。\n\n结论: 该模型大概率是 Claude Opus 4.6 或更早版本（非 4.7）。`,
+        };
+      } else {
+        status = 'warning';
+        score = 40;
+        analysis = {
+          type: 'warn',
+          text: `HTTP ${httpStatus}，无法从状态码直接判定。请检查响应内容。`,
+        };
+      }
+
+      return {
+        text: summary,
+        thinking: '',
+        status,
+        analysis,
+        score,
+        timing,
+      };
+    },
+  },
 };
 
-const TOTAL_TESTS = 7;
+const TOTAL_TESTS = 8;
 
 // ---- Test Runner ----
 function setTestStatus(testId, status, text) {

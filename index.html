@@ -400,6 +400,48 @@ Q3: Who created you?</pre>
         </div>
       </div>
 
+      <!-- Test 8: Adaptive Thinking Only (4.6 vs 4.7) -->
+      <div class="test-card" id="test8Card">
+        <div class="card-header">
+          <div class="test-number">08</div>
+          <div class="test-info">
+            <h3>Adaptive Thinking 模式检测</h3>
+            <p class="test-tag">区分 Opus 4.6 / 4.7</p>
+          </div>
+          <div class="test-status" id="test8Status">
+            <span class="status-dot"></span>
+            <span class="status-text">待测</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="test-desc">
+            <p>根据 <a href="https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking" target="_blank" rel="noopener">Anthropic 官方文档</a>：<strong>Opus 4.7 只支持 <code>thinking: {type: "adaptive"}</code></strong>，显式传入 <code>thinking: {type: "enabled"}</code> 会返回 <strong>400 错误</strong>；而 Opus 4.6 则同时接受两种模式。通过这个 API 请求特征可精准区分 4.6 与 4.7。</p>
+          </div>
+          <div class="test-prompt">
+            <div class="prompt-label">测试 Request Body</div>
+            <pre>{
+  "model": "...",
+  "thinking": { "type": "enabled", "budget_tokens": 1024 },
+  "max_tokens": 2048,
+  "messages": [{ "role": "user", "content": "Hi" }]
+}</pre>
+          </div>
+          <div class="test-result hidden" id="test8Result">
+            <div class="result-label">API 响应</div>
+            <pre class="result-content" id="test8Response"></pre>
+            <div class="result-analysis" id="test8Analysis"></div>
+            <div class="test-timing" id="test8Timing" style="display:none"></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-sm" onclick="runSingleTest(8)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            运行此测试
+          </button>
+          <span class="footer-note">需要 Anthropic API</span>
+        </div>
+      </div>
+
       <!-- Test 7: Base64 Chinese Decode Detection -->
       <div class="test-card" id="test7Card">
         <div class="card-header">
@@ -495,6 +537,13 @@ Q3: Who created you?</pre>
             <p>Claude 分词器对 Base64 编码的中文解码有特定错误模式。通过对比解码结果与预期原文的相似度和错误特征，辅助判断模型身份。</p>
           </div>
         </div>
+        <div class="info-item">
+          <div class="info-icon">08</div>
+          <div>
+            <h4>Adaptive Thinking 模式</h4>
+            <p>Opus 4.7 只支持 <code>thinking.type: "adaptive"</code>，传入 <code>"enabled"</code> 会返回 400；Opus 4.6 两种模式都接受。这是区分 4.6 与 4.7 最可靠的 API 请求级特征。</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -538,6 +587,7 @@ Q3: Who created you?</pre>
             <li><strong>测试 05 - 身份指纹</strong>：模型自报身份，仅供参考（可被 system prompt 伪造）。</li>
             <li><strong>测试 06 - 逻辑推理</strong>：检测思考预算是否被削减。正确答案 21，错误答案 29/34 为降智特征。</li>
             <li><strong>测试 07 - Base64 编解码</strong>：分词器指纹检测，通过 Base64 解码错误模式辅助判断模型类型。</li>
+            <li><strong>测试 08 - Adaptive Thinking 模式</strong>：API 请求级特征。Opus 4.7 拒绝 <code>thinking.type: "enabled"</code>（400 错误），Opus 4.6 接受；是区分 4.6/4.7 的决定性指标。</li>
           </ul>
         </div>
         <div class="guide-block">
